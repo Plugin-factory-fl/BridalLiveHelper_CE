@@ -29,3 +29,17 @@
 .blh-open-panel-btn--open:hover {
   box-shadow: 0 6px 20px rgba(60, 40, 68, 0.6);
 }
+
+.blh-open-panel-btn--restore {
+  animation: blh-restore-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes blh-restore-pulse {
+  0%,
+  100% {
+    box-shadow: 0 4px 16px rgba(91, 61, 102, 0.35);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(123, 79, 138, 0.65);
+  }
+}

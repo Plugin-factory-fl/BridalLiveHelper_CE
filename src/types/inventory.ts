@@ -14,5 +14,8 @@ export type InventoryItem = {
   department: string
   size: string
   color: string
+  /** Franchise location where this stock row lives. */
+  locationId: string
+  locationName: string
   onHand: number
 }

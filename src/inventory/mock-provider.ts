@@ -6,6 +6,11 @@ import type {
   InventorySearchResult,
 } from './types'
 
+export const MOCK_LOCATIONS = [
+  { id: 'store-1', name: 'Main Boutique' },
+  { id: 'store-2', name: 'Second Location' },
+] as const
+
 /** In-memory catalog for MVP demos; new variants are appended until reload. */
 const MOCK_ITEMS: InventoryItem[] = [
   {
@@ -16,6 +21,8 @@ const MOCK_ITEMS: InventoryItem[] = [
     department: 'Dress',
     size: '6',
     color: 'Light Pink',
+    locationId: 'store-1',
+    locationName: 'Main Boutique',
     onHand: 0,
   },
   {
@@ -26,7 +33,21 @@ const MOCK_ITEMS: InventoryItem[] = [
     department: 'Dress',
     size: '8',
     color: 'Light Pink',
+    locationId: 'store-1',
+    locationName: 'Main Boutique',
     onHand: 1,
+  },
+  {
+    id: '2b',
+    itemNumber: 'DR-10043',
+    style: 'Iris',
+    vendor: 'Sample Designer',
+    department: 'Dress',
+    size: '8',
+    color: 'Light Pink',
+    locationId: 'store-2',
+    locationName: 'Second Location',
+    onHand: 2,
   },
   {
     id: '3',
@@ -36,6 +57,8 @@ const MOCK_ITEMS: InventoryItem[] = [
     department: 'Dress',
     size: '10',
     color: 'Ivory',
+    locationId: 'store-1',
+    locationName: 'Main Boutique',
     onHand: 0,
   },
   {
@@ -46,6 +69,8 @@ const MOCK_ITEMS: InventoryItem[] = [
     department: 'Dress',
     size: '12',
     color: 'Champagne',
+    locationId: 'store-2',
+    locationName: 'Second Location',
     onHand: 2,
   },
   {
@@ -56,6 +81,8 @@ const MOCK_ITEMS: InventoryItem[] = [
     department: 'Shoes',
     size: '8',
     color: 'Ivory',
+    locationId: 'store-1',
+    locationName: 'Main Boutique',
     onHand: 2,
   },
   {
@@ -66,7 +93,21 @@ const MOCK_ITEMS: InventoryItem[] = [
     department: 'Shoes',
     size: '9',
     color: 'Ivory',
+    locationId: 'store-1',
+    locationName: 'Main Boutique',
     onHand: 1,
+  },
+  {
+    id: '6b',
+    itemNumber: 'SH-22002',
+    style: 'Bella',
+    vendor: 'Shoe Co',
+    department: 'Shoes',
+    size: '9',
+    color: 'Ivory',
+    locationId: 'store-2',
+    locationName: 'Second Location',
+    onHand: 0,
   },
   {
     id: '7',
@@ -76,6 +117,8 @@ const MOCK_ITEMS: InventoryItem[] = [
     department: 'Jewelry',
     size: 'OS',
     color: 'Silver',
+    locationId: 'store-2',
+    locationName: 'Second Location',
     onHand: 4,
   },
 ]
@@ -117,12 +160,15 @@ export function findDuplicateWarning(
       i.color.toLowerCase() === c,
   )
   if (!dup) return undefined
-  return `Variant already exists: ${dup.itemNumber} (${dup.size} / ${dup.color})`
+  return `This style + size + color already exists at ${dup.locationName} as item ${dup.itemNumber} (${dup.size} / ${dup.color}).`
 }
 
 async function search(query: InventorySearchQuery): Promise<InventorySearchResult> {
   const q = normalizeQuery(query)
-  const items = MOCK_ITEMS.filter((item) => matchesItem(item, q))
+  const items = MOCK_ITEMS.filter((item) => matchesItem(item, q)).sort((a, b) => {
+    if (a.locationId !== b.locationId) return a.locationId.localeCompare(b.locationId)
+    return a.itemNumber.localeCompare(b.itemNumber)
+  })
   let duplicateWarning: string | undefined
   if (q.style && q.size && q.color) {
     duplicateWarning = findDuplicateWarning(MOCK_ITEMS, q.style, q.size, q.color)
@@ -140,7 +186,11 @@ async function createVariant(
       i.color.toLowerCase() === payload.color.toLowerCase(),
   )
   if (exists) {
-    return { ok: false, message: 'Duplicate blocked: style + size + color already exists.' }
+    const dup = findDuplicateWarning(MOCK_ITEMS, payload.styleId, payload.size, payload.color)
+    return {
+      ok: false,
+      message: dup ?? 'Duplicate blocked: style + size + color already exists.',
+    }
   }
 
   const source = payload.sourceItemNumber
@@ -163,17 +213,17 @@ async function createVariant(
     department: source?.department ?? 'Dress',
     size: payload.size,
     color: payload.color,
+    locationId: source?.locationId ?? 'store-1',
+    locationName: source?.locationName ?? 'Main Boutique',
     onHand: 0,
   }
   MOCK_ITEMS.push(newItem)
 
-  let message = `Mock variant created: ${itemNumber}`
+  let message = `Variant created: ${itemNumber}`
   if (source) {
-    message += ` (cloned vendor/department from ${source.itemNumber})`
-  } else if (payload.sourceItemNumber) {
-    message += ` (source ${payload.sourceItemNumber} not found — using defaults)`
+    message += ` for ${source.style} (based on ${source.itemNumber})`
   }
-  message += '. Phase 2 will persist via BridalLive API.'
+  message += '. Phase 2 will save to BridalLive.'
 
   return { ok: true, itemNumber, message }
 }

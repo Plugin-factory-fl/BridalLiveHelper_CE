@@ -17,7 +17,7 @@ npm run build
 2. Open **`https://app.bridallive.com`**
 3. Click the **BridalLive Helper** toolbar icon to open the side panel (or click the **BL** button on the page)
 
-Requires **Chrome 114+**.
+Requires **Chrome 141+** (side panel open/close animation on tab switch).
 
 ## Development
 

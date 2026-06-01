@@ -6,7 +6,7 @@ export default defineManifest({
   description:
     'Side workstation for BridalLive: inventory lookup, variant creation, and custom labels.',
   version: '0.3.0',
-  minimum_chrome_version: '114',
+  minimum_chrome_version: '141',
   icons: {
     '16': 'public/icons/icon-16.png',
     '48': 'public/icons/icon-48.png',
