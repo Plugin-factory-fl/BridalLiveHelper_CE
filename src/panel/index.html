@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BridalLive Helper</title>
+    <link rel="stylesheet" href="./panel.css" />
+  </head>
+  <body>
+    <header class="panel-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">BL</span>
+        <span class="brand-name">Helper</span>
+      </div>
+      <nav class="panel-nav" aria-label="Main">
+        <button type="button" class="nav-btn" data-view="home">Home</button>
+        <button type="button" class="nav-btn" data-view="inventory">Inventory</button>
+        <button type="button" class="nav-btn" data-view="labels">Labels</button>
+        <button type="button" class="nav-btn" data-view="settings">Settings</button>
+      </nav>
+    </header>
+    <main id="blh-view-root" class="panel-main"></main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

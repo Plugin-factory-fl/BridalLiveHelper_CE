@@ -1,0 +1,65 @@
+body {
+  margin: 0;
+  min-width: 280px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: #2a2230;
+}
+
+.popup-shell {
+  padding: 16px;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.muted {
+  color: #6b5f73;
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+
+code {
+  font-size: 11px;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: #7b4f8a;
+  color: #fff;
+}
+
+.btn-secondary {
+  background: #fff;
+  border-color: #e5dde9;
+}
+
+.status {
+  font-size: 12px;
+  min-height: 1.2em;
+  margin: 8px 0 0;
+  color: #6b5f73;
+}
+
+.status.error {
+  color: #9b2c2c;
+}
+
+.version {
+  margin-top: 12px;
+  font-size: 11px;
+  color: #9a8fa3;
+}

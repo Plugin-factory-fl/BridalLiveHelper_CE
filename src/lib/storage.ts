@@ -1,0 +1,47 @@
+import {
+  PANEL_DEFAULT_WIDTH,
+  STORAGE_KEYS,
+  type ActiveView,
+} from './config'
+
+export type StoredPreferences = {
+  panelOpen: boolean
+  panelWidth: number
+  activeView: ActiveView
+  mockStoreId: string
+  devScreenOverride: string | null
+}
+
+const DEFAULTS: StoredPreferences = {
+  panelOpen: true,
+  panelWidth: PANEL_DEFAULT_WIDTH,
+  activeView: 'home',
+  mockStoreId: 'store-1',
+  devScreenOverride: null,
+}
+
+export async function loadPreferences(): Promise<StoredPreferences> {
+  const data = await chrome.storage.local.get(Object.values(STORAGE_KEYS))
+  return {
+    panelOpen: data[STORAGE_KEYS.panelOpen] ?? DEFAULTS.panelOpen,
+    panelWidth: Number(data[STORAGE_KEYS.panelWidth]) || DEFAULTS.panelWidth,
+    activeView: (data[STORAGE_KEYS.activeView] as ActiveView) ?? DEFAULTS.activeView,
+    mockStoreId: String(data[STORAGE_KEYS.mockStoreId] ?? DEFAULTS.mockStoreId),
+    devScreenOverride: data[STORAGE_KEYS.devScreenOverride] ?? null,
+  }
+}
+
+export async function savePreferences(
+  patch: Partial<StoredPreferences>,
+): Promise<StoredPreferences> {
+  const next: Record<string, unknown> = {}
+  if (patch.panelOpen !== undefined) next[STORAGE_KEYS.panelOpen] = patch.panelOpen
+  if (patch.panelWidth !== undefined) next[STORAGE_KEYS.panelWidth] = patch.panelWidth
+  if (patch.activeView !== undefined) next[STORAGE_KEYS.activeView] = patch.activeView
+  if (patch.mockStoreId !== undefined) next[STORAGE_KEYS.mockStoreId] = patch.mockStoreId
+  if (patch.devScreenOverride !== undefined) {
+    next[STORAGE_KEYS.devScreenOverride] = patch.devScreenOverride
+  }
+  await chrome.storage.local.set(next)
+  return loadPreferences()
+}

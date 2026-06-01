@@ -1,0 +1,8 @@
+Load this extension in Chrome from the dist/ folder after building:
+
+  npm install
+  npm run build
+
+Then: chrome://extensions → Developer mode → Load unpacked → select the dist/ folder.
+
+For development with HMR, run `npm run dev` and load unpacked from dist/ (CRXJS updates on save).

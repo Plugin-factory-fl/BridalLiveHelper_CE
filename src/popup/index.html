@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BridalLive Helper</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <div class="popup-shell">
+      <h1>BridalLive Helper</h1>
+      <p class="muted">Opens in Chrome’s side panel beside BridalLive (does not overlay the page).</p>
+      <button id="open-panel" type="button" class="btn btn-primary">Open side panel</button>
+      <button id="open-settings" type="button" class="btn btn-secondary">Open settings</button>
+      <p id="status" class="status" role="status"></p>
+      <footer class="version">v0.3.0</footer>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
