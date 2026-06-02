@@ -1,4 +1,4 @@
-import { isBridalLiveAppUrl } from '../lib/config'
+import { isBridalLiveAppUrl, isHelperPrintPreviewUrl, STORAGE_KEYS, type PrintPreviewSession } from '../lib/config'
 import { log, warn } from '../lib/log'
 import { MSG } from '../lib/messages'
 
@@ -43,6 +43,92 @@ function isPanelVisible(tabId: number): boolean {
 
 function tabUrl(tab: chrome.tabs.Tab): string {
   return tab.url ?? tab.pendingUrl ?? ''
+}
+
+async function loadPrintPreviewSession(): Promise<PrintPreviewSession | null> {
+  const data = await chrome.storage.session.get(STORAGE_KEYS.helperPrintPreview)
+  const session = data[STORAGE_KEYS.helperPrintPreview] as PrintPreviewSession | undefined
+  if (!session || typeof session.windowId !== 'number' || typeof session.blTabId !== 'number') {
+    return null
+  }
+  return session
+}
+
+async function savePrintPreviewSession(session: PrintPreviewSession | null): Promise<void> {
+  if (session) {
+    await chrome.storage.session.set({ [STORAGE_KEYS.helperPrintPreview]: session })
+  } else {
+    await chrome.storage.session.remove(STORAGE_KEYS.helperPrintPreview)
+  }
+}
+
+async function isPrintPreviewWindow(windowId: number): Promise<boolean> {
+  const session = await loadPrintPreviewSession()
+  return session?.windowId === windowId
+}
+
+async function resolvePrintPreviewBlTab(): Promise<{ blTabId: number; windowId: number } | null> {
+  const pinned = await chrome.storage.session.get(STORAGE_KEYS.helperBridalLiveTabId)
+  const pinnedId = pinned[STORAGE_KEYS.helperBridalLiveTabId] as number | undefined
+  if (typeof pinnedId === 'number') {
+    try {
+      const tab = await chrome.tabs.get(pinnedId)
+      if (tab.id && tab.windowId !== undefined && isBridalLiveAppUrl(tabUrl(tab))) {
+        return { blTabId: tab.id, windowId: tab.windowId }
+      }
+    } catch {
+      /* tab gone */
+    }
+  }
+
+  for (const tabId of wantsOpenTabs) {
+    try {
+      const tab = await chrome.tabs.get(tabId)
+      if (tab.id && tab.windowId !== undefined && isBridalLiveAppUrl(tabUrl(tab))) {
+        return { blTabId: tab.id, windowId: tab.windowId }
+      }
+    } catch {
+      wantsOpenTabs.delete(tabId)
+    }
+  }
+
+  return null
+}
+
+/** Keep the same side panel document visible while the user prints from a PDF tab. */
+async function maintainPanelDuringPrintPreview(
+  activeTabId: number,
+  windowId: number,
+): Promise<void> {
+  const session = await loadPrintPreviewSession()
+  if (!session || session.windowId !== windowId) return
+
+  await ensurePanelEnabledForTab(activeTabId)
+
+  if (livePanelTabs.size > 0) return
+
+  if (!wantsOpenTabs.has(session.blTabId)) return
+
+  try {
+    await chrome.sidePanel.open({ windowId })
+  } catch (e) {
+    warn('sidePanel reopen during print preview failed', e)
+  }
+}
+
+async function waitForTabComplete(tabId: number): Promise<void> {
+  const tab = await chrome.tabs.get(tabId)
+  if (tab.status === 'complete') return
+
+  await new Promise<void>((resolve) => {
+    const listener: Parameters<typeof chrome.tabs.onUpdated.addListener>[0] = (id, info) => {
+      if (id === tabId && info.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener)
+        resolve()
+      }
+    }
+    chrome.tabs.onUpdated.addListener(listener)
+  })
 }
 
 function markPanelClosed(tabId: number): void {
@@ -110,17 +196,24 @@ async function setupSidePanel(): Promise<void> {
 }
 
 if (sidePanelApi.onClosed) {
-  sidePanelApi.onClosed.addListener(({ tabId }) => {
+  sidePanelApi.onClosed.addListener(({ tabId, windowId }) => {
     if (tabId !== undefined) {
       markPanelClosed(tabId)
       if (autoHideSuppress === 0) {
-        setWantsPanelOpenSync(tabId, false)
+        void (async () => {
+          if (await isPrintPreviewWindow(windowId)) return
+          setWantsPanelOpenSync(tabId, false)
+        })()
       }
     }
   })
 }
 
 async function ensureBlTabEnabled(tabId: number): Promise<void> {
+  await ensurePanelEnabledForTab(tabId)
+}
+
+async function ensurePanelEnabledForTab(tabId: number): Promise<void> {
   await chrome.sidePanel.setOptions({ tabId, enabled: true, path: PANEL_PATH })
 }
 
@@ -130,6 +223,7 @@ async function disableSidePanelForTab(tabId: number): Promise<void> {
 
 /** Close with Chrome's slide animation; keeps "wants open" unless user closed manually. */
 async function hidePanelForWindow(windowId: number): Promise<void> {
+  if (await isPrintPreviewWindow(windowId)) return
   if (!sidePanelApi.close) return
   autoHideSuppress++
   try {
@@ -155,6 +249,11 @@ async function preparePanelRestore(tabId: number): Promise<void> {
 }
 
 async function handleTabActivated(tabId: number, windowId: number): Promise<void> {
+  if (await isPrintPreviewWindow(windowId)) {
+    await maintainPanelDuringPrintPreview(tabId, windowId)
+    return
+  }
+
   let tab: chrome.tabs.Tab
   try {
     tab = await chrome.tabs.get(tabId)
@@ -166,6 +265,11 @@ async function handleTabActivated(tabId: number, windowId: number): Promise<void
   if (isBridalLiveAppUrl(url)) {
     await ensureBlTabEnabled(tabId)
     await preparePanelRestore(tabId)
+    return
+  }
+
+  if (isHelperPrintPreviewUrl(url)) {
+    await maintainPanelDuringPrintPreview(tabId, windowId)
     return
   }
 
@@ -181,6 +285,13 @@ async function handleTabActivated(tabId: number, windowId: number): Promise<void
 }
 
 async function handleTabUrlChange(tabId: number, tab: chrome.tabs.Tab): Promise<void> {
+  if (tab.windowId !== undefined && (await isPrintPreviewWindow(tab.windowId))) {
+    if (tab.active) {
+      await maintainPanelDuringPrintPreview(tabId, tab.windowId)
+    }
+    return
+  }
+
   const url = tabUrl(tab)
   if (isBridalLiveAppUrl(url)) {
     await ensureBlTabEnabled(tabId)
@@ -194,6 +305,16 @@ async function handleTabUrlChange(tabId: number, tab: chrome.tabs.Tab): Promise<
     await hidePanelForWindow(tab.windowId)
   }
 }
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void (async () => {
+    const session = await loadPrintPreviewSession()
+    if (session?.pdfTabId === tabId) {
+      await savePrintPreviewSession(null)
+      await chrome.storage.session.remove(STORAGE_KEYS.helperPrintPdfBytes)
+    }
+  })()
+})
 
 chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
   void handleTabActivated(tabId, windowId)
@@ -258,6 +379,50 @@ async function handleMessage(
   message: { type?: string; action?: string; [key: string]: unknown },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
+  if (message.action === 'labels-print-preview-begin') {
+    const fromMessage =
+      typeof message.blTabId === 'number' && typeof message.windowId === 'number'
+        ? { blTabId: message.blTabId as number, windowId: message.windowId as number }
+        : null
+    const ctx = fromMessage ?? (await resolvePrintPreviewBlTab())
+    if (!ctx) {
+      return { ok: false, error: 'Open BridalLive with the side panel first.' }
+    }
+    await savePrintPreviewSession({
+      windowId: ctx.windowId,
+      blTabId: ctx.blTabId,
+    })
+    return { ok: true }
+  }
+
+  if (message.action === 'labels-print-preview-opened' && typeof message.pdfTabId === 'number') {
+    const session = await loadPrintPreviewSession()
+    const pdfTabId = message.pdfTabId as number
+    if (!session) {
+      return { ok: false, error: 'Print preview session expired.' }
+    }
+
+    autoHideSuppress++
+    try {
+      await savePrintPreviewSession({ ...session, pdfTabId })
+      await waitForTabComplete(pdfTabId)
+      await ensurePanelEnabledForTab(pdfTabId)
+      await chrome.tabs.update(pdfTabId, { active: true })
+
+      if (livePanelTabs.size === 0 && wantsOpenTabs.has(session.blTabId)) {
+        try {
+          await chrome.sidePanel.open({ windowId: session.windowId })
+        } catch (e) {
+          warn('sidePanel open for print preview failed', e)
+        }
+      }
+    } finally {
+      autoHideSuppress--
+    }
+
+    return { ok: true }
+  }
+
   if (message.action === 'get-side-panel-state') {
     const tabId = (message.tabId as number | undefined) ?? sender.tab?.id
     if (!tabId) return { ok: false, open: false }

@@ -34,6 +34,19 @@ export function isBridalLiveAppUrl(url: string): boolean {
   }
 }
 
+/** Label PDF opens on an extension page so the side panel can stay enabled on that tab. */
+export function isHelperPrintPreviewUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return (
+      parsed.protocol === 'chrome-extension:' &&
+      parsed.pathname.endsWith('/pdf-viewer/index.html')
+    )
+  } catch {
+    return false
+  }
+}
+
 /** Future Render API base; empty in foundation uses mock client. */
 export const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? ''
@@ -44,7 +57,20 @@ export const STORAGE_KEYS = {
   activeView: 'activeView',
   mockStoreId: 'mockStoreId',
   devScreenOverride: 'devScreenOverride',
+  labelsUiState: 'labelsUiState',
+  lastBridalLiveContext: 'lastBridalLiveContext',
+  helperBridalLiveTabId: 'helperBridalLiveTabId',
+  /** Active while a label PDF tab is open — side panel must stay up in that window. */
+  helperPrintPreview: 'helperPrintPreview',
+  /** Uint8 array stored while the print-preview tab is open. */
+  helperPrintPdfBytes: 'helperPrintPdfBytes',
 } as const
+
+export type PrintPreviewSession = {
+  windowId: number
+  blTabId: number
+  pdfTabId?: number
+}
 
 export type ActiveView = 'home' | 'inventory' | 'labels' | 'settings'
 

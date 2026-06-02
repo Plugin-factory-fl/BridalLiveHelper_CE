@@ -1,12 +1,39 @@
-import { isBridalLiveAppUrl } from '../lib/config'
+import { isBridalLiveAppUrl, STORAGE_KEYS } from '../lib/config'
 import { MSG, type ExtensionMessage, type ExtensionResponse } from '../lib/messages'
 
+async function getPinnedBridalLiveTabId(): Promise<number | undefined> {
+  const data = await chrome.storage.session.get(STORAGE_KEYS.helperBridalLiveTabId)
+  const id = data[STORAGE_KEYS.helperBridalLiveTabId] as number | undefined
+  if (typeof id !== 'number') return undefined
+  try {
+    const tab = await chrome.tabs.get(id)
+    if (tab.id && tab.url && isBridalLiveAppUrl(tab.url)) return tab.id
+  } catch {
+    /* tab closed */
+  }
+  return undefined
+}
+
+export async function pinBridalLiveTab(tabId: number): Promise<void> {
+  await chrome.storage.session.set({ [STORAGE_KEYS.helperBridalLiveTabId]: tabId })
+}
+
 async function getBridalLiveTab(): Promise<chrome.tabs.Tab | undefined> {
+  const pinnedId = await getPinnedBridalLiveTabId()
+  if (pinnedId) {
+    return chrome.tabs.get(pinnedId)
+  }
+
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (active?.url && isBridalLiveAppUrl(active.url)) return active
+  if (active?.url && isBridalLiveAppUrl(active.url)) {
+    if (active.id) await pinBridalLiveTab(active.id)
+    return active
+  }
 
   const tabs = await chrome.tabs.query({ url: ['https://app.bridallive.com/*'] })
-  return tabs[0]
+  const tab = tabs[0]
+  if (tab?.id) await pinBridalLiveTab(tab.id)
+  return tab
 }
 
 export async function sendToContent<T extends ExtensionResponse>(
@@ -69,6 +96,7 @@ export function connectPanelLifecycle(): void {
 
   void getBridalLiveTab().then((tab) => {
     if (tab?.id) {
+      void pinBridalLiveTab(tab.id)
       port.postMessage({ tabId: tab.id })
     }
   })

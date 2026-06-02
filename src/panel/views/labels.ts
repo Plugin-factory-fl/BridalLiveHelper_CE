@@ -1,5 +1,5 @@
 import { DEPARTMENTS } from '../../lib/config'
-import { getDataSourceLabel } from '../../lib/data-source'
+import { loadLabelsUiState, saveLabelsUiState } from '../../lib/labels-ui-state'
 import { MSG } from '../../lib/messages'
 import type { ReceivingVoucherLine } from '../../labels/types'
 import { printLabelBatch } from '../../labels/print-batch'
@@ -27,44 +27,48 @@ export const renderLabels: ViewRender = (root) => {
   ).join('')
 
   section.innerHTML = `
-    <div id="blh-labels-context-banner" class="banner banner-info" hidden></div>
     <h2 class="view-title">Labels</h2>
-    <p class="muted small">MVP: mock templates + Avery 5160 PDF. Phase 2 swaps data providers only.</p>
-    <p class="muted small" id="blh-labels-source">${escapeHtml(getDataSourceLabel())}</p>
+    <p class="muted small">Avery 5160 sheet · PDF opens in a new tab — print at 100% scale.</p>
 
-    <fieldset class="fieldset">
+    <fieldset class="fieldset labels-block">
       <legend>Sheet start position</legend>
-      <p class="muted small">Click the first empty label on your partial Avery sheet (QuickBooks-style).</p>
-      <div id="blh-label-grid" class="label-grid" role="grid" aria-label="Avery label start position"></div>
-      <p class="muted small">Start: row <strong id="blh-start-row">1</strong>, column <strong id="blh-start-col">1</strong></p>
+      <p class="muted small">On a partially used sheet, click the first empty label. Printing fills left-to-right from there.</p>
+      <div class="label-grid-wrap">
+        <div id="blh-label-grid" class="label-grid" role="grid" aria-label="Avery label start position"></div>
+      </div>
+      <p class="muted small label-grid-caption">Start: row <strong id="blh-start-row">1</strong>, column <strong id="blh-start-col">1</strong></p>
     </fieldset>
 
-    <fieldset class="fieldset">
-      <legend>Templates (mock)</legend>
-      <ul id="blh-label-templates" class="hint-list"></ul>
-    </fieldset>
+    <section class="labels-block labels-block--primary" aria-labelledby="blh-receiving-heading">
+      <div class="labels-block-header">
+        <h3 class="subheading" id="blh-receiving-heading">Receiving voucher</h3>
+        <span class="labels-badge labels-badge--primary">Main workflow</span>
+      </div>
+      <p class="labels-lead">When stock arrives, select lines on the voucher and bulk-print labels (one label per received quantity).</p>
+      <div id="blh-labels-context-banner" class="banner banner-info" hidden></div>
+      <p class="muted small" id="blh-receiving-hint">Loading voucher lines…</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost btn-sm" id="blh-receiving-select-all">Select all</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="blh-receiving-select-none">Select none</button>
+      </div>
+      <ul id="blh-labels-receiving-list" class="receiving-lines"></ul>
+      <button type="button" class="btn btn-primary btn-block" id="blh-labels-receiving">
+        Print selected lines (PDF)
+      </button>
+    </section>
 
-    <form id="blh-labels-form" class="form-grid">
-      <label>Department
-        <select name="department">${deptOptions}</select>
-      </label>
-      <label>Item # <input name="itemNumber" type="text" placeholder="DR-10042" autocomplete="off" /></label>
-      <label>Quantity <input name="quantity" type="number" min="1" value="1" /></label>
-      <button type="submit" class="btn btn-primary">Generate PDF</button>
-    </form>
-
-    <hr class="divider" />
-
-    <h3 class="subheading">Receiving voucher</h3>
-    <p class="muted small" id="blh-receiving-hint">Loading mock voucher lines…</p>
-    <div id="blh-labels-receiving-actions" class="btn-row">
-      <button type="button" class="btn btn-ghost btn-sm" id="blh-receiving-select-all">Select all</button>
-      <button type="button" class="btn btn-ghost btn-sm" id="blh-receiving-select-none">Select none</button>
-    </div>
-    <ul id="blh-labels-receiving-list" class="receiving-lines"></ul>
-    <button type="button" class="btn btn-secondary" id="blh-labels-receiving">
-      Print selected lines (PDF)
-    </button>
+    <section class="labels-block labels-block--reprint" aria-labelledby="blh-reprint-heading">
+      <h3 class="subheading" id="blh-reprint-heading">Reprint label</h3>
+      <p class="muted small">One-off reprint when a tag was torn off or you need a single label from inventory.</p>
+      <form id="blh-labels-reprint-form" class="form-grid form-grid--compact">
+        <label>Department
+          <select name="department">${deptOptions}</select>
+        </label>
+        <label>Item # <input name="itemNumber" type="text" placeholder="DR-10042" autocomplete="off" /></label>
+        <label>Quantity <input name="quantity" type="number" min="1" value="1" /></label>
+        <button type="submit" class="btn btn-reprint">Reprint (PDF)</button>
+      </form>
+    </section>
 
     <p id="blh-labels-status" class="status" role="status"></p>
   `
@@ -74,10 +78,32 @@ export const renderLabels: ViewRender = (root) => {
   let startRow = 1
   let startCol = 1
   let receivingLines: ReceivingVoucherLine[] = []
+  let selectionByItem: Record<string, boolean> = {}
 
   const statusEl = section.querySelector('#blh-labels-status') as HTMLElement
   const startRowEl = section.querySelector('#blh-start-row') as HTMLElement
   const startColEl = section.querySelector('#blh-start-col') as HTMLElement
+  const reprintForm = section.querySelector('#blh-labels-reprint-form') as HTMLFormElement
+  const scrollRoot = document.getElementById('blh-view-root')
+
+  const persistUiState = () => {
+    const fd = new FormData(reprintForm)
+    void saveLabelsUiState({
+      startRow,
+      startCol,
+      receivingSelected: { ...selectionByItem },
+      reprintDepartment: String(fd.get('department') ?? 'Dress'),
+      reprintItemNumber: String(fd.get('itemNumber') ?? ''),
+      reprintQuantity: Number(fd.get('quantity')) || 1,
+      statusText: statusEl.textContent ?? '',
+      statusKind: statusEl.classList.contains('success')
+        ? 'success'
+        : statusEl.classList.contains('error')
+          ? 'error'
+          : '',
+      scrollTop: scrollRoot?.scrollTop ?? 0,
+    })
+  }
 
   const paintStartLabels = () => {
     startRowEl.textContent = String(startRow)
@@ -104,11 +130,43 @@ export const renderLabels: ViewRender = (root) => {
         startRow = row
         startCol = col
         paintStartLabels()
+        persistUiState()
       })
       grid.appendChild(cell)
     }
   }
-  paintStartLabels()
+
+  const applySavedUiState = async () => {
+    const saved = await loadLabelsUiState()
+    startRow = saved.startRow
+    startCol = saved.startCol
+    selectionByItem = { ...saved.receivingSelected }
+    paintStartLabels()
+
+    const deptSelect = reprintForm.elements.namedItem('department') as HTMLSelectElement
+    const itemInput = reprintForm.elements.namedItem('itemNumber') as HTMLInputElement
+    const qtyInput = reprintForm.elements.namedItem('quantity') as HTMLInputElement
+    if (deptSelect) deptSelect.value = saved.reprintDepartment
+    if (itemInput) itemInput.value = saved.reprintItemNumber
+    if (qtyInput) qtyInput.value = String(saved.reprintQuantity)
+
+    if (saved.statusText) {
+      statusEl.textContent = saved.statusText
+      statusEl.className = saved.statusKind ? `status ${saved.statusKind}` : 'status'
+    }
+
+    if (scrollRoot && saved.scrollTop > 0) {
+      scrollRoot.scrollTop = saved.scrollTop
+    }
+
+    if (receivingLines.length > 0) {
+      receivingLines = receivingLines.map((line) => ({
+        ...line,
+        selected: selectionByItem[line.itemNumber] !== false,
+      }))
+      renderReceivingList()
+    }
+  }
 
   const paintBanner = () => {
     const banner = section.querySelector('#blh-labels-context-banner') as HTMLElement
@@ -117,20 +175,25 @@ export const renderLabels: ViewRender = (root) => {
     if (ctx?.screen === 'receiving') {
       banner.hidden = false
       banner.textContent =
-        'Receiving screen detected — bulk print uses mock lines until Phase 2 DOM scrape.'
-      hint.textContent =
-        'Mock voucher (Phase 2 will read the live receiving table on this screen).'
+        'Receiving screen open — Phase 2 will load lines from this voucher automatically.'
+      hint.textContent = 'Lines below are mock data until live scrape is wired.'
     } else {
       banner.hidden = true
       hint.textContent =
-        'Mock voucher lines for demo. Open a receiving screen or use Dev override in Settings.'
+        'Open a receiving voucher in BridalLive (or Settings → Dev override → Receiving) for the full flow.'
+    }
+  }
+
+  const syncSelectionMap = () => {
+    for (const line of receivingLines) {
+      selectionByItem[line.itemNumber] = line.selected !== false
     }
   }
 
   const renderReceivingList = () => {
     const list = section.querySelector('#blh-labels-receiving-list') as HTMLElement
     if (receivingLines.length === 0) {
-      list.innerHTML = '<li class="muted">No lines loaded.</li>'
+      list.innerHTML = '<li class="muted receiving-line-empty">No lines loaded.</li>'
       return
     }
     list.innerHTML = receivingLines
@@ -154,6 +217,8 @@ export const renderLabels: ViewRender = (root) => {
       cb.addEventListener('change', () => {
         const idx = Number((cb as HTMLInputElement).dataset.idx)
         receivingLines[idx].selected = (cb as HTMLInputElement).checked
+        syncSelectionMap()
+        persistUiState()
       })
     })
   }
@@ -161,16 +226,26 @@ export const renderLabels: ViewRender = (root) => {
   const setStatus = (text: string, kind: 'success' | 'error' | '') => {
     statusEl.textContent = text
     statusEl.className = kind ? `status ${kind}` : 'status'
+    persistUiState()
   }
 
   const runPrint = async (
-    items: { itemNumber: string; quantity: number; style?: string; size?: string; color?: string; department?: string }[],
+    items: {
+      itemNumber: string
+      quantity: number
+      style?: string
+      size?: string
+      color?: string
+      department?: string
+    }[],
     department: (typeof DEPARTMENTS)[number],
+    emptyMessage: string,
   ) => {
     if (items.length === 0) {
-      setStatus('Select at least one line or enter an item #.', 'error')
+      setStatus(emptyMessage, 'error')
       return
     }
+    persistUiState()
     setStatus('Generating PDF…', '')
     try {
       const labels = await printLabelBatch({
@@ -186,31 +261,29 @@ export const renderLabels: ViewRender = (root) => {
     }
   }
 
-  void sendToContent({ type: MSG.LABELS_LIST_TEMPLATES }).then((res) => {
-    const ul = section.querySelector('#blh-label-templates') as HTMLElement
-    if (!res.ok || !res.labelTemplates?.length) {
-      ul.innerHTML = '<li class="muted">No templates loaded.</li>'
-      return
-    }
-    ul.innerHTML = res.labelTemplates
-      .map((t) => `<li>${escapeHtml(t.name)} (${t.widthIn}" × ${t.heightIn}")</li>`)
-      .join('')
-  })
+  void (async () => {
+    await applySavedUiState()
 
-  void sendToContent({ type: MSG.LABELS_GET_RECEIVING_LINES }).then((res) => {
+    const res = await sendToContent({ type: MSG.LABELS_GET_RECEIVING_LINES })
     if (res.ok && res.receivingLines) {
-      receivingLines = res.receivingLines.map((l) => ({ ...l, selected: l.selected !== false }))
+      receivingLines = res.receivingLines.map((l) => ({
+        ...l,
+        selected: selectionByItem[l.itemNumber] !== false,
+      }))
+      syncSelectionMap()
       renderReceivingList()
     }
-  })
+  })()
 
   paintBanner()
   document.addEventListener('blh-context-updated', paintBanner)
 
-  const form = section.querySelector('#blh-labels-form') as HTMLFormElement
-  form.addEventListener('submit', async (e) => {
+  reprintForm.addEventListener('input', () => persistUiState())
+  const onScroll = () => persistUiState()
+  scrollRoot?.addEventListener('scroll', onScroll, { passive: true })
+  reprintForm.addEventListener('submit', async (e) => {
     e.preventDefault()
-    const fd = new FormData(form)
+    const fd = new FormData(reprintForm)
     const department = String(fd.get('department')) as (typeof DEPARTMENTS)[number]
     await runPrint(
       [
@@ -220,6 +293,7 @@ export const renderLabels: ViewRender = (root) => {
         },
       ],
       department,
+      'Enter an item # to reprint.',
     )
   })
 
@@ -227,14 +301,18 @@ export const renderLabels: ViewRender = (root) => {
     receivingLines.forEach((l) => {
       l.selected = true
     })
+    syncSelectionMap()
     renderReceivingList()
+    persistUiState()
   })
 
   section.querySelector('#blh-receiving-select-none')?.addEventListener('click', () => {
     receivingLines.forEach((l) => {
       l.selected = false
     })
+    syncSelectionMap()
     renderReceivingList()
+    persistUiState()
   })
 
   section.querySelector('#blh-labels-receiving')?.addEventListener('click', async () => {
@@ -251,8 +329,12 @@ export const renderLabels: ViewRender = (root) => {
         department: l.department,
       })),
       primaryDept,
+      'Select at least one receiving line.',
     )
   })
 
-  return () => document.removeEventListener('blh-context-updated', paintBanner)
+  return () => {
+    document.removeEventListener('blh-context-updated', paintBanner)
+    scrollRoot?.removeEventListener('scroll', onScroll)
+  }
 }

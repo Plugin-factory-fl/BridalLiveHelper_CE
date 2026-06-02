@@ -1,10 +1,5 @@
-import type { BridalLiveContext } from '../../types/context'
-import { getPanelContext, setPanelContext } from '../panel-context'
+import { getPanelContext } from '../panel-context'
 import type { ViewRender } from '../router'
-
-export function setHomeContext(ctx: BridalLiveContext): void {
-  setPanelContext(ctx)
-}
 
 export const renderHome: ViewRender = (root) => {
   const section = document.createElement('section')

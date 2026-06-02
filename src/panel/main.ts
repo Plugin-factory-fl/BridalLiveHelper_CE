@@ -2,7 +2,8 @@ import type { ActiveView } from '../lib/config'
 import { MSG } from '../lib/messages'
 import { connectPanelLifecycle, onContextUpdate, sendToContent } from './bridge-client'
 import { navigate, registerView } from './router'
-import { renderHome, setHomeContext } from './views/home'
+import { initPanelContextFromStorage, setPanelContext } from './panel-context'
+import { renderHome } from './views/home'
 import { renderInventory } from './views/inventory'
 import { renderLabels } from './views/labels'
 import { renderSettings } from './views/settings'
@@ -51,7 +52,7 @@ function wireNav(): void {
 function wireContext(): void {
   onContextUpdate((message) => {
     if (message.type === MSG.CONTEXT_UPDATE) {
-      setHomeContext(message.context)
+      setPanelContext(message.context)
     }
     if (message.type === MSG.NAVIGATE_PANEL_VIEW) {
       const view = message.view as ActiveView
@@ -61,6 +62,7 @@ function wireContext(): void {
 }
 
 async function init(): Promise<void> {
+  await initPanelContextFromStorage()
   connectPanelLifecycle()
   wireNav()
   wireContext()
@@ -71,7 +73,7 @@ async function init(): Promise<void> {
 
   const ctxRes = await sendToContent({ type: MSG.GET_CONTEXT })
   if (ctxRes.ok && ctxRes.context) {
-    setHomeContext(ctxRes.context)
+    setPanelContext(ctxRes.context)
   }
 
   await sendToContent({ type: MSG.PANEL_READY })

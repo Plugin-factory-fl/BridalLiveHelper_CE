@@ -1,9 +1,11 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { isBridalLiveAppUrl, STORAGE_KEYS } from '../lib/config'
 import type { LabelPayload } from './types'
 import type { AverySheetSpec } from './templates'
 import { labelsPerPage, slotPosition, startSlotIndex } from './layout'
 
 const IN_TO_PT = 72
+const PDF_VIEWER_PATH = 'src/pdf-viewer/index.html'
 
 function departmentAccent(department: string): ReturnType<typeof rgb> {
   switch (department) {
@@ -137,29 +139,61 @@ export async function buildLabelPdf(
   return doc.save()
 }
 
-export type OpenPdfResult = { ok: true } | { ok: false; error: string }
+export type OpenPdfResult = { ok: true; tabId?: number } | { ok: false; error: string }
+
+async function resolveBlTabForPrint(): Promise<{ blTabId: number; windowId: number } | null> {
+  const pinned = await chrome.storage.session.get(STORAGE_KEYS.helperBridalLiveTabId)
+  const pinnedId = pinned[STORAGE_KEYS.helperBridalLiveTabId] as number | undefined
+  if (typeof pinnedId === 'number') {
+    try {
+      const tab = await chrome.tabs.get(pinnedId)
+      if (tab.id && tab.windowId !== undefined && tab.url && isBridalLiveAppUrl(tab.url)) {
+        return { blTabId: tab.id, windowId: tab.windowId }
+      }
+    } catch {
+      /* tab gone */
+    }
+  }
+  return null
+}
 
 /**
- * Open PDF in a new tab from an extension page (side panel).
- * Blob URLs created in the service worker are not readable in new tabs — keep this in the panel.
+ * Open PDF on an extension print-preview page (not a blob: tab).
+ * Blob tabs cannot host the side panel — Chrome closes it on tab switch.
  */
 export async function openPdfInNewTab(pdfBytes: Uint8Array): Promise<OpenPdfResult> {
-  const blob = new Blob([Uint8Array.from(pdfBytes)], { type: 'application/pdf' })
-
   try {
-    const url = URL.createObjectURL(blob)
-    await chrome.tabs.create({ url })
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    return { ok: true }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Could not open PDF tab'
-    try {
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank', 'noopener')
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
-      return { ok: true }
-    } catch {
-      return { ok: false, error: msg }
+    const blTab = await resolveBlTabForPrint()
+    await chrome.storage.session.set({
+      [STORAGE_KEYS.helperPrintPdfBytes]: Array.from(pdfBytes),
+    })
+
+    const begin = (await chrome.runtime.sendMessage({
+      action: 'labels-print-preview-begin',
+      blTabId: blTab?.blTabId,
+      windowId: blTab?.windowId,
+    })) as { ok?: boolean; error?: string }
+    if (!begin?.ok) {
+      return { ok: false, error: begin?.error ?? 'Could not start print preview' }
     }
+
+    const viewerUrl = chrome.runtime.getURL(PDF_VIEWER_PATH)
+    const tab = await chrome.tabs.create({ url: viewerUrl, active: false })
+
+    if (!tab.id) {
+      return { ok: false, error: 'Could not open PDF tab' }
+    }
+
+    const opened = (await chrome.runtime.sendMessage({
+      action: 'labels-print-preview-opened',
+      pdfTabId: tab.id,
+    })) as { ok?: boolean; error?: string }
+    if (!opened?.ok) {
+      return { ok: false, error: opened?.error ?? 'Could not focus print preview' }
+    }
+
+    return { ok: true, tabId: tab.id }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not open PDF tab' }
   }
 }
