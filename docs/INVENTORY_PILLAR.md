@@ -22,6 +22,7 @@ See [MVP_ROADMAP.md](./MVP_ROADMAP.md) for the full checklist and demo script.
 | Add variants + clone from source | Done (mock; appends to in-memory catalog) |
 | Order context banner + prefill | Done (selectors optional) |
 | Copy / apply item # to order | Clipboard + apply when selectors set |
+| Item photos in results (Image column) | Placeholder now; `imageUrl` via Item Picture API in Phase 2 |
 | Live BridalLive data | Phase 2 |
 
 ## Architecture

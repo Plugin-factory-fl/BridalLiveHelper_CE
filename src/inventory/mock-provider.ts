@@ -17,8 +17,11 @@ export const MOCK_LOCATIONS = [
 const MOCK_ITEMS: InventoryItem[] = [...MOCK_CATALOG_ITEMS]
 
 function normalizeQuery(query: InventorySearchQuery) {
+  const name = (query.name ?? query.style)?.trim().toLowerCase() ?? ''
   return {
-    style: query.style?.trim().toLowerCase() ?? '',
+    locationId: query.locationId?.trim() ?? '',
+    department: query.department?.trim().toLowerCase() ?? '',
+    name,
     vendor: query.vendor?.trim().toLowerCase() ?? '',
     size: query.size?.trim() ?? '',
     color: query.color?.trim().toLowerCase() ?? '',
@@ -27,8 +30,10 @@ function normalizeQuery(query: InventorySearchQuery) {
 }
 
 function matchesItem(item: InventoryItem, q: ReturnType<typeof normalizeQuery>): boolean {
+  if (q.locationId && item.locationId !== q.locationId) return false
+  if (q.department && item.department.toLowerCase() !== q.department) return false
   if (q.itemNumber && !item.itemNumber.toLowerCase().includes(q.itemNumber)) return false
-  if (q.style && !item.style.toLowerCase().includes(q.style)) return false
+  if (q.name && !item.style.toLowerCase().includes(q.name)) return false
   if (q.vendor && !item.vendor.toLowerCase().includes(q.vendor)) return false
   if (q.size && item.size !== q.size) return false
   if (q.color && !item.color.toLowerCase().includes(q.color)) return false
@@ -63,8 +68,8 @@ async function search(query: InventorySearchQuery): Promise<InventorySearchResul
     return a.itemNumber.localeCompare(b.itemNumber)
   })
   let duplicateWarning: string | undefined
-  if (q.style && q.size && q.color) {
-    duplicateWarning = findDuplicateWarning(MOCK_ITEMS, q.style, q.size, q.color)
+  if (q.name && q.size && q.color) {
+    duplicateWarning = findDuplicateWarning(MOCK_ITEMS, q.name, q.size, q.color)
   }
   return { items, duplicateWarning }
 }

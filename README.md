@@ -22,10 +22,12 @@ Requires **Chrome 141+** (side panel open/close animation on tab switch).
 ## Development
 
 ```bash
-npm run dev
+npm run build   # required before reload — Chrome loads dist/, not src/
 ```
 
-Reload the extension after changes.
+Then **chrome://extensions** → Reload on BridalLive Helper.
+
+Optional watch mode: `npm run dev` (still reload the extension after each build).
 
 ## MVP vs Phase 2
 

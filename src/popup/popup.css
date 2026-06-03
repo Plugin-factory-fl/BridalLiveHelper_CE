@@ -17,12 +17,12 @@ h1 {
 
 .muted {
   color: #6b5f73;
-  font-size: 12px;
+  font-size: 14px;
   margin: 0 0 12px;
 }
 
 code {
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .btn {
@@ -48,7 +48,7 @@ code {
 }
 
 .status {
-  font-size: 12px;
+  font-size: 14px;
   min-height: 1.2em;
   margin: 8px 0 0;
   color: #6b5f73;
@@ -60,6 +60,6 @@ code {
 
 .version {
   margin-top: 12px;
-  font-size: 11px;
+  font-size: 14px;
   color: #9a8fa3;
 }

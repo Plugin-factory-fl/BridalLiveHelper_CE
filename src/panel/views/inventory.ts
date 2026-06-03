@@ -1,9 +1,16 @@
+import { listStores } from '../../api/client'
 import { MSG } from '../../lib/messages'
 import { getPanelContext } from '../panel-context'
 import { showModal } from '../modal'
-import { itemNumberCellHtml, wireCopyItemButtons } from '../copy-item'
+import { copyableCellHtml, wireCopyItemButtons } from '../copy-item'
+import { wireFieldClearButtons } from '../field-clear'
+import { inventoryImageCellHtml } from '../inventory-image-cell'
 import { sendToContent } from '../bridge-client'
-import type { InventoryItem } from '../../types/inventory'
+import {
+  INVENTORY_DEPARTMENTS,
+  type InventoryItem,
+  type InventorySearchQuery,
+} from '../../types/inventory'
 import type { BridalLiveContext } from '../../types/context'
 import type { ViewRender } from '../router'
 
@@ -24,10 +31,17 @@ function prefillSearchFromOrder(form: HTMLFormElement, ctx: BridalLiveContext): 
     if (input && !input.value.trim()) input.value = value
   }
 
-  set('style', line.style)
+  set('name', line.style)
   set('size', line.size)
   set('color', line.color)
   set('itemNumber', line.itemNumber)
+}
+
+function setFormField(form: HTMLFormElement, name: string, value: string): void {
+  const el = form.elements.namedItem(name)
+  if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) {
+    el.value = value
+  }
 }
 
 type SourceItem = Pick<
@@ -37,6 +51,36 @@ type SourceItem = Pick<
 
 const BROWSE_PAGE_SIZE = 10
 
+function readSearchQuery(form: HTMLFormElement): InventorySearchQuery {
+  const fd = new FormData(form)
+  return {
+    locationId: String(fd.get('locationId') ?? '').trim(),
+    department: String(fd.get('department') ?? '').trim(),
+    name: String(fd.get('name') ?? '').trim(),
+    vendor: String(fd.get('vendor') ?? '').trim(),
+    size: String(fd.get('size') ?? '').trim(),
+    color: String(fd.get('color') ?? '').trim(),
+    itemNumber: String(fd.get('itemNumber') ?? '').trim(),
+  }
+}
+
+function isSearchQueryEmpty(query: InventorySearchQuery): boolean {
+  return (
+    !query.locationId &&
+    !query.department &&
+    !query.name &&
+    !query.vendor &&
+    !query.size &&
+    !query.color &&
+    !query.itemNumber
+  )
+}
+
+const departmentOptionsHtml = [
+  '<option value="">All departments</option>',
+  ...INVENTORY_DEPARTMENTS.map((d) => `<option value="${d}">${d}</option>`),
+].join('')
+
 export const renderInventory: ViewRender = (root) => {
   const section = document.createElement('section')
   section.className = 'view view-inventory'
@@ -44,19 +88,64 @@ export const renderInventory: ViewRender = (root) => {
     <div id="blh-inv-order-banner" class="banner banner-info" hidden></div>
     <h2 class="view-title">Inventory</h2>
     <p class="muted">Search across all connected locations. Add a new size or color from an existing item in the results.</p>
-    <form id="blh-inv-search" class="form-grid">
-      <label>Style <input name="style" type="text" placeholder="Iris" autocomplete="off" /></label>
-      <label>Vendor <input name="vendor" type="text" autocomplete="off" /></label>
-      <label>Size <input name="size" type="text" placeholder="10" autocomplete="off" /></label>
-      <label>Color <input name="color" type="text" placeholder="Light Pink" autocomplete="off" /></label>
-      <label>Item # <input name="itemNumber" type="text" autocomplete="off" /></label>
+    <form id="blh-inv-search" class="form-grid form-grid--clearable">
+      <label>Location
+        <span class="field-clear-wrap">
+          <select name="locationId" id="blh-inv-location" aria-label="Location">
+            <option value="">All locations</option>
+          </select>
+          <button type="button" class="field-clear-btn" hidden aria-label="Clear location" title="Clear">×</button>
+        </span>
+      </label>
+      <label>Department
+        <span class="field-clear-wrap">
+          <select name="department" aria-label="Department">${departmentOptionsHtml}</select>
+          <button type="button" class="field-clear-btn" hidden aria-label="Clear department" title="Clear">×</button>
+        </span>
+      </label>
+      <label>Name
+        <span class="field-clear-wrap">
+          <input
+            name="name"
+            type="text"
+            placeholder="CD55830"
+            title="BL item name (full code from export)"
+            autocomplete="off"
+          />
+          <button type="button" class="field-clear-btn" hidden aria-label="Clear name" title="Clear">×</button>
+        </span>
+      </label>
+      <label>Item #
+        <span class="field-clear-wrap">
+          <input name="itemNumber" type="text" inputmode="numeric" autocomplete="off" />
+          <button type="button" class="field-clear-btn" hidden aria-label="Clear item number" title="Clear">×</button>
+        </span>
+      </label>
+      <label>Vendor
+        <span class="field-clear-wrap">
+          <input name="vendor" type="text" autocomplete="off" />
+          <button type="button" class="field-clear-btn" hidden aria-label="Clear vendor" title="Clear">×</button>
+        </span>
+      </label>
+      <label>Size
+        <span class="field-clear-wrap">
+          <input name="size" type="text" placeholder="10" autocomplete="off" />
+          <button type="button" class="field-clear-btn" hidden aria-label="Clear size" title="Clear">×</button>
+        </span>
+      </label>
+      <label>Color
+        <span class="field-clear-wrap">
+          <input name="color" type="text" placeholder="Lylac" autocomplete="off" />
+          <button type="button" class="field-clear-btn" hidden aria-label="Clear color" title="Clear">×</button>
+        </span>
+      </label>
       <button type="submit" class="btn btn-primary">Search</button>
     </form>
 
-    <section class="inv-browse" id="blh-inv-browse" aria-labelledby="blh-inv-browse-heading">
+    <section class="inv-browse" id="blh-inv-browse" hidden aria-labelledby="blh-inv-browse-heading">
       <h3 class="subheading" id="blh-inv-browse-heading">Browse catalog</h3>
-      <p class="muted small">Sorted A–Z by item # · 10 per page · Add to order searches BL by item #</p>
-      <ul id="blh-inv-browse-list" class="inv-browse-list"></ul>
+      <p class="muted small">Leave search fields empty and press Search · Sorted A–Z by item # · 10 per page</p>
+      <div id="blh-inv-browse-table" class="inv-browse-table-wrap"></div>
       <div class="inv-browse-pager btn-row">
         <button type="button" class="btn btn-ghost btn-sm" id="blh-inv-page-prev" disabled>Previous</button>
         <span id="blh-inv-page-label" class="inv-browse-page-label">Page 1 of 10</span>
@@ -71,8 +160,18 @@ export const renderInventory: ViewRender = (root) => {
   root.appendChild(section)
 
   const searchForm = section.querySelector('#blh-inv-search') as HTMLFormElement
+  const browseSection = section.querySelector('#blh-inv-browse') as HTMLElement
+  const resultsEl = section.querySelector('#blh-inv-results') as HTMLElement
   const orderBanner = section.querySelector('#blh-inv-order-banner') as HTMLElement
   const statusEl = section.querySelector('#blh-inv-status') as HTMLElement
+
+  const setBrowseVisible = (visible: boolean) => {
+    browseSection.hidden = !visible
+  }
+
+  const clearSearchResults = () => {
+    resultsEl.innerHTML = ''
+  }
 
   let currentStoreId = 'store-1'
   let catalogItems: InventoryItem[] = []
@@ -81,6 +180,21 @@ export const renderInventory: ViewRender = (root) => {
   void chrome.storage.local.get('mockStoreId').then((data) => {
     currentStoreId = String(data.mockStoreId ?? 'store-1')
   })
+
+  async function loadLocationFilterOptions(): Promise<void> {
+    const select = section.querySelector('#blh-inv-location') as HTMLSelectElement | null
+    if (!select) return
+    try {
+      const stores = await listStores()
+      select.innerHTML = [
+        '<option value="">All locations</option>',
+        ...stores.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`),
+      ].join('')
+    } catch {
+      select.innerHTML = '<option value="">All locations</option>'
+    }
+    wireFieldClearButtons(searchForm)
+  }
 
   const paintOrderBanner = () => {
     const ctx = getPanelContext()
@@ -109,6 +223,7 @@ export const renderInventory: ViewRender = (root) => {
     if (!ctx) return
     prefillSearchFromOrder(searchForm, ctx)
     paintOrderBanner()
+    wireFieldClearButtons(searchForm)
   }
 
   function showDuplicateModal(message: string, onDismiss?: () => void): void {
@@ -124,7 +239,81 @@ export const renderInventory: ViewRender = (root) => {
   function locationCell(item: InventoryItem): string {
     const isHere = item.locationId === currentStoreId
     const cls = isHere ? 'loc-tag loc-tag--here' : 'loc-tag loc-tag--other'
-    return `<span class="${cls}">${esc(item.locationName)}</span>`
+    return `<span class="${cls}" title="${esc(item.locationName)}">${esc(item.locationName)}</span>`
+  }
+
+  const inventoryTableHeadHtml = `
+    <tr>
+      <th class="inv-image-col">Image</th>
+      <th>Name</th>
+      <th>Item #</th>
+      <th>Dept</th>
+      <th>Size</th>
+      <th>Color</th>
+      <th>Location</th>
+      <th title="On hand quantity">Qty</th>
+      <th class="inv-actions-col" aria-label="Actions"></th>
+    </tr>
+  `
+
+  function inventoryRowActionsHtml(item: InventoryItem, onOrder: boolean): string {
+    const variant = `<button type="button" class="btn btn-add-variant btn-sm btn-icon-action" data-add-variant title="Add another size or color for this style" aria-label="Add variant">+</button>`
+    const order = onOrder
+      ? `<button type="button" class="btn btn-add-to-order btn-sm btn-icon-action" data-apply="${esc(item.saleSearchQuery)}" title="Add to order" aria-label="Add to order">⊕</button>`
+      : ''
+    return `<span class="row-actions-compact">${variant}${order}</span>`
+  }
+
+  function inventoryItemRowHtml(item: InventoryItem, onOrder: boolean): string {
+    return `
+      <tr
+        class="inv-item-row"
+        data-item="${esc(item.itemNumber)}"
+        data-style="${esc(item.style)}"
+        data-vendor="${esc(item.vendor)}"
+        data-department="${esc(item.department)}"
+        data-size="${esc(item.size)}"
+        data-color="${esc(item.color)}"
+        data-sale-query="${esc(item.saleSearchQuery)}"
+      >
+        ${inventoryImageCellHtml(item, esc)}
+        <td class="copyable-cell inv-truncate" title="${esc(item.style)}">${copyableCellHtml(item.style, esc, 'Copy name')}</td>
+        <td class="copyable-cell inv-truncate" title="${esc(item.itemNumber)}">${copyableCellHtml(item.itemNumber, esc, 'Copy item number')}</td>
+        <td class="inv-truncate" title="${esc(item.department)}">${esc(item.department)}</td>
+        <td class="inv-truncate" title="${esc(item.size)}">${esc(item.size)}</td>
+        <td class="inv-truncate" title="${esc(item.color)}">${esc(item.color)}</td>
+        <td class="inv-loc-cell">${locationCell(item)}</td>
+        <td class="inv-oh-cell">${item.onHand}</td>
+        <td class="row-actions">${inventoryRowActionsHtml(item, onOrder)}</td>
+      </tr>`
+  }
+
+  function renderInventoryTable(
+    container: HTMLElement,
+    items: InventoryItem[],
+    mode: 'browse' | 'search',
+  ): void {
+    const onOrder = getPanelContext()?.screen === 'order'
+    container.innerHTML = `
+      <table class="data-table data-table--inventory">
+        <colgroup>
+          <col class="col-inv-img" />
+          <col class="col-inv-name" />
+          <col class="col-inv-num" />
+          <col class="col-inv-dept" />
+          <col class="col-inv-size" />
+          <col class="col-inv-color" />
+          <col class="col-inv-loc" />
+          <col class="col-inv-oh" />
+          <col class="col-inv-act" />
+        </colgroup>
+        <thead>${inventoryTableHeadHtml}</thead>
+        <tbody>
+          ${items.map((item) => inventoryItemRowHtml(item, onOrder)).join('')}
+        </tbody>
+      </table>
+    `
+    wireResultActions(container)
   }
 
   function openAddVariantModal(source: SourceItem): void {
@@ -232,7 +421,7 @@ export const renderInventory: ViewRender = (root) => {
   }
 
   function renderBrowseList(): void {
-    const list = section.querySelector('#blh-inv-browse-list') as HTMLElement
+    const tableWrap = section.querySelector('#blh-inv-browse-table') as HTMLElement
     const pageLabel = section.querySelector('#blh-inv-page-label') as HTMLElement
     const prevBtn = section.querySelector('#blh-inv-page-prev') as HTMLButtonElement
     const nextBtn = section.querySelector('#blh-inv-page-next') as HTMLButtonElement
@@ -241,54 +430,20 @@ export const renderInventory: ViewRender = (root) => {
     browsePage = Math.min(Math.max(1, browsePage), totalPages)
     const start = (browsePage - 1) * BROWSE_PAGE_SIZE
     const pageItems = catalogItems.slice(start, start + BROWSE_PAGE_SIZE)
-    const onOrder = getPanelContext()?.screen === 'order'
 
     if (catalogItems.length === 0) {
-      list.innerHTML = '<li class="muted inv-browse-empty">Loading catalog…</li>'
+      tableWrap.innerHTML = '<p class="muted inv-browse-empty">Loading catalog…</p>'
       pageLabel.textContent = 'Page 1 of 10'
       prevBtn.disabled = true
       nextBtn.disabled = true
       return
     }
 
-    list.innerHTML = pageItems
-      .map(
-        (item) => `
-      <li
-        class="inv-browse-item"
-        data-item="${esc(item.itemNumber)}"
-        data-style="${esc(item.style)}"
-        data-vendor="${esc(item.vendor)}"
-        data-department="${esc(item.department)}"
-        data-size="${esc(item.size)}"
-        data-color="${esc(item.color)}"
-        data-sale-query="${esc(item.saleSearchQuery)}"
-      >
-        <div class="inv-browse-item-main">
-          <span class="inv-browse-name">#${esc(item.itemNumber)} · ${esc(item.style)}</span>
-          <span class="inv-browse-meta muted small">${esc(item.vendor)} · ${esc(item.color)} · size ${esc(item.size)}</span>
-        </div>
-        <div class="inv-browse-item-actions row-actions">
-          <button type="button" class="btn btn-ghost btn-sm" data-fill-search title="Fill panel search fields with this item">
-            Search
-          </button>
-          ${
-            onOrder
-              ? `<button type="button" class="btn btn-add-to-order btn-sm" data-apply="${esc(item.saleSearchQuery)}" title="Search BridalLive sale by item #">
-            <span class="btn-action-icon" aria-hidden="true">+</span> Add to order
-          </button>`
-              : ''
-          }
-        </div>
-      </li>`,
-      )
-      .join('')
+    renderInventoryTable(tableWrap, pageItems, 'browse')
 
     pageLabel.textContent = `Page ${browsePage} of ${totalPages}`
     prevBtn.disabled = browsePage <= 1
     nextBtn.disabled = browsePage >= totalPages
-    wireResultActions(list)
-    wireFillSearch(list)
   }
 
   async function loadCatalogBrowse(): Promise<void> {
@@ -298,29 +453,9 @@ export const renderInventory: ViewRender = (root) => {
       browsePage = 1
       renderBrowseList()
     } else {
-      const list = section.querySelector('#blh-inv-browse-list') as HTMLElement
-      list.innerHTML = `<li class="error inv-browse-empty">${esc(res.error ?? 'Could not load catalog')}</li>`
+      const tableWrap = section.querySelector('#blh-inv-browse-table') as HTMLElement
+      tableWrap.innerHTML = `<p class="error inv-browse-empty">${esc(res.error ?? 'Could not load catalog')}</p>`
     }
-  }
-
-  function wireFillSearch(container: HTMLElement): void {
-    container.querySelectorAll('[data-fill-search]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const row = btn.closest('[data-item]') as HTMLElement
-        if (!row) return
-        const item = itemRowDataset(row)
-        const set = (name: string, value: string) => {
-          const input = searchForm.elements.namedItem(name) as HTMLInputElement | null
-          if (input) input.value = value
-        }
-        set('itemNumber', item.itemNumber)
-        set('style', item.style)
-        set('vendor', item.vendor)
-        set('size', item.size)
-        set('color', item.color)
-        searchForm.requestSubmit()
-      })
-    })
   }
 
   function wireResultActions(container: HTMLElement): void {
@@ -348,7 +483,7 @@ export const renderInventory: ViewRender = (root) => {
 
     container.querySelectorAll('[data-add-variant]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const row = btn.closest('tr, .inv-browse-item') as HTMLElement
+        const row = btn.closest('tr.inv-item-row') as HTMLElement
         if (!row) return
         openAddVariantModal(itemRowDataset(row))
       })
@@ -360,24 +495,27 @@ export const renderInventory: ViewRender = (root) => {
     const stored = await chrome.storage.local.get('mockStoreId')
     currentStoreId = String(stored.mockStoreId ?? 'store-1')
 
-    const fd = new FormData(searchForm)
-    const res = await sendToContent({
-      type: MSG.INVENTORY_SEARCH,
-      query: {
-        style: String(fd.get('style') ?? ''),
-        vendor: String(fd.get('vendor') ?? ''),
-        size: String(fd.get('size') ?? ''),
-        color: String(fd.get('color') ?? ''),
-        itemNumber: String(fd.get('itemNumber') ?? ''),
-      },
-    })
-
-    const results = section.querySelector('#blh-inv-results') as HTMLElement
+    const query = readSearchQuery(searchForm)
     statusEl.textContent = ''
     statusEl.className = 'status'
 
+    if (isSearchQueryEmpty(query)) {
+      setBrowseVisible(true)
+      clearSearchResults()
+      await loadCatalogBrowse()
+      return
+    }
+
+    setBrowseVisible(false)
+    clearSearchResults()
+
+    const res = await sendToContent({
+      type: MSG.INVENTORY_SEARCH,
+      query,
+    })
+
     if (!res.ok || !res.search) {
-      results.innerHTML = `<p class="error">${esc(res.error ?? 'Search failed')}</p>`
+      resultsEl.innerHTML = `<p class="error">${esc(res.error ?? 'Search failed')}</p>`
       return
     }
 
@@ -386,60 +524,12 @@ export const renderInventory: ViewRender = (root) => {
     }
 
     if (res.search.items.length === 0) {
-      results.innerHTML =
-        '<p class="muted">No matches across your locations. Try fewer filters or a different style name.</p>'
+      resultsEl.innerHTML =
+        '<p class="muted">No matches. Try another location, department, name, or item #.</p>'
       return
     }
 
-    const onOrder = getPanelContext()?.screen === 'order'
-
-    results.innerHTML = `
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Item #</th>
-            <th>BL name</th>
-            <th>Size</th>
-            <th>Color</th>
-            <th>Location</th>
-            <th>On hand</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${res.search.items
-            .map(
-              (item) => `
-            <tr
-              data-item="${esc(item.itemNumber)}"
-              data-style="${esc(item.style)}"
-              data-vendor="${esc(item.vendor)}"
-              data-department="${esc(item.department)}"
-              data-size="${esc(item.size)}"
-              data-color="${esc(item.color)}"
-              data-sale-query="${esc(item.saleSearchQuery)}"
-            >
-              <td class="item-num-cell">${itemNumberCellHtml(item.itemNumber, esc)}</td>
-              <td>${esc(item.style)}</td>
-              <td>${esc(item.size)}</td>
-              <td>${esc(item.color)}</td>
-              <td>${locationCell(item)}</td>
-              <td>${item.onHand}</td>
-              <td class="row-actions">
-                <button type="button" class="btn btn-add-variant btn-sm" data-add-variant title="Add another size or color for this style">
-                  <span class="btn-action-icon" aria-hidden="true">+</span> Add variant
-                </button>
-                ${onOrder ? `<button type="button" class="btn btn-add-to-order btn-sm" data-apply="${esc(item.saleSearchQuery)}" title="Search BridalLive sale by item #">
-                  <span class="btn-action-icon" aria-hidden="true">+</span> Add to order
-                </button>` : ''}
-              </td>
-            </tr>`,
-            )
-            .join('')}
-        </tbody>
-      </table>
-    `
-    wireResultActions(results)
+    renderInventoryTable(resultsEl, res.search.items, 'search')
   })
 
   section.querySelector('#blh-inv-page-prev')?.addEventListener('click', () => {
@@ -453,11 +543,12 @@ export const renderInventory: ViewRender = (root) => {
 
   const onContextForBrowse = () => {
     applyContextPrefill()
-    if (catalogItems.length > 0) renderBrowseList()
+    if (!browseSection.hidden && catalogItems.length > 0) renderBrowseList()
   }
 
   applyContextPrefill()
-  void loadCatalogBrowse()
+  void loadLocationFilterOptions()
+  wireFieldClearButtons(searchForm)
   document.addEventListener('blh-context-updated', onContextForBrowse)
 
   return () => {
