@@ -12,19 +12,6 @@ import { buildLabelPdf, openPdfInNewTab } from './pdf'
 import { DEFAULT_SHEET, getSheetSpec } from './templates'
 import type { LabelPrintBatchResult } from './types'
 
-function layoutSummaryForRequest(
-  styleLayoutId: string,
-  uniqueLayoutIds: string[],
-): string {
-  if (styleLayoutId === AUTO_STYLE_LAYOUT_ID) {
-    const names = uniqueLayoutIds
-      .map((id) => getLabelStyleLayout(id)?.name ?? id)
-      .filter(Boolean)
-    return names.length > 0 ? `Auto (${names.join(', ')})` : 'Auto by department'
-  }
-  return getLabelStyleLayout(styleLayoutId)?.name ?? styleLayoutId
-}
-
 /**
  * Generate Avery PDF and open print tab. Runs in the side panel (not content script)
  * so pdf-lib is not injected into every BridalLive page.
@@ -64,7 +51,6 @@ export async function printLabelBatch(
     }
   }
 
-  const uniqueLayoutIds = [...new Set(labels.map((l) => l.styleLayoutId))]
   const pdfBytes = await buildLabelPdf(labels, sheet, startRow, startCol)
   const pageCount = pageCountForLabels(
     labels.length,
@@ -72,14 +58,7 @@ export async function printLabelBatch(
     (startRow - 1) * sheet.columns + (startCol - 1),
   )
 
-  const openResult = await openPdfInNewTab(pdfBytes, {
-    labelCount: labels.length,
-    pageCount,
-    sheetName: sheet.name,
-    layoutSummary: layoutSummaryForRequest(styleLayoutId, uniqueLayoutIds),
-    averyStart: `Row ${startRow}, column ${startCol}`,
-    generatedAt: new Date().toISOString(),
-  })
+  const openResult = await openPdfInNewTab(pdfBytes)
 
   const mode =
     getDataSource() === 'mock'

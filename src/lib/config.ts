@@ -34,8 +34,9 @@ export function isBridalLiveAppUrl(url: string): boolean {
   }
 }
 
-/** Label PDF opens on an extension page so the side panel can stay enabled on that tab. */
+/** Label PDF tab (native Chrome viewer on blob: URL, or legacy extension redirect page). */
 export function isHelperPrintPreviewUrl(url: string): boolean {
+  if (url.startsWith('blob:') && url.includes('zoom=100')) return true
   try {
     const parsed = new URL(url)
     return (
@@ -51,6 +52,9 @@ export function isHelperPrintPreviewUrl(url: string): boolean {
 export const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? ''
 
+/** Chrome PDF viewer open parameter — 100% scale, not fit-to-page. */
+export const PDF_VIEWER_ZOOM = '#zoom=100'
+
 export const STORAGE_KEYS = {
   panelOpen: 'panelOpen',
   panelWidth: 'panelWidth',
@@ -64,8 +68,6 @@ export const STORAGE_KEYS = {
   helperPrintPreview: 'helperPrintPreview',
   /** Uint8 array stored while the print-preview tab is open. */
   helperPrintPdfBytes: 'helperPrintPdfBytes',
-  /** Summary shown on the print-preview page. */
-  helperPrintPreviewMeta: 'helperPrintPreviewMeta',
 } as const
 
 export type PrintPreviewSession = {

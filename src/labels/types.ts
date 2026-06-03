@@ -38,13 +38,4 @@ export type LabelPrintBatchResult = {
   pdfOpened?: boolean
 }
 
-export type PrintPreviewMeta = {
-  labelCount: number
-  pageCount: number
-  sheetName: string
-  layoutSummary: string
-  averyStart: string
-  generatedAt: string
-}
-
 export type { LabelLineItem, LabelTemplate }

@@ -1,12 +1,11 @@
 import { PDFDocument, StandardFonts } from 'pdf-lib'
-import { isBridalLiveAppUrl, STORAGE_KEYS } from '../lib/config'
+import { isBridalLiveAppUrl, PDF_VIEWER_ZOOM, STORAGE_KEYS } from '../lib/config'
 import { drawLabel } from './draw-label'
-import type { LabelPayload, PrintPreviewMeta } from './types'
+import type { LabelPayload } from './types'
 import type { AverySheetSpec } from './templates'
 import { labelsPerPage, slotPosition, startSlotIndex } from './layout'
 
 const IN_TO_PT = 72
-const PDF_VIEWER_PATH = 'src/pdf-viewer/index.html'
 
 export async function buildLabelPdf(
   labels: LabelPayload[],
@@ -66,19 +65,15 @@ async function resolveBlTabForPrint(): Promise<{ blTabId: number; windowId: numb
 }
 
 /**
- * Open PDF on an extension print-preview page (not a blob: tab).
- * Blob tabs cannot host the side panel — Chrome closes it on tab switch.
+ * Open PDF in a new tab at 100% zoom (Chrome's native PDF viewer).
+ * Uses a blob: URL with #zoom=100 so the viewer does not fit-to-page (~95%).
  */
-export async function openPdfInNewTab(
-  pdfBytes: Uint8Array,
-  meta: PrintPreviewMeta,
-): Promise<OpenPdfResult> {
+export async function openPdfInNewTab(pdfBytes: Uint8Array): Promise<OpenPdfResult> {
   try {
     const blTab = await resolveBlTabForPrint()
-    await chrome.storage.session.set({
-      [STORAGE_KEYS.helperPrintPdfBytes]: Array.from(pdfBytes),
-      [STORAGE_KEYS.helperPrintPreviewMeta]: meta,
-    })
+    const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' })
+    const blobUrl = URL.createObjectURL(blob)
+    const pdfUrl = `${blobUrl}${PDF_VIEWER_ZOOM}`
 
     const begin = (await chrome.runtime.sendMessage({
       action: 'labels-print-preview-begin',
@@ -86,13 +81,14 @@ export async function openPdfInNewTab(
       windowId: blTab?.windowId,
     })) as { ok?: boolean; error?: string }
     if (!begin?.ok) {
+      URL.revokeObjectURL(blobUrl)
       return { ok: false, error: begin?.error ?? 'Could not start print preview' }
     }
 
-    const viewerUrl = chrome.runtime.getURL(PDF_VIEWER_PATH)
-    const tab = await chrome.tabs.create({ url: viewerUrl, active: false })
+    const tab = await chrome.tabs.create({ url: pdfUrl, active: false })
 
     if (!tab.id) {
+      URL.revokeObjectURL(blobUrl)
       return { ok: false, error: 'Could not open PDF tab' }
     }
 
@@ -101,6 +97,7 @@ export async function openPdfInNewTab(
       pdfTabId: tab.id,
     })) as { ok?: boolean; error?: string }
     if (!opened?.ok) {
+      URL.revokeObjectURL(blobUrl)
       return { ok: false, error: opened?.error ?? 'Could not focus print preview' }
     }
 
