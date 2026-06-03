@@ -3,24 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Label print preview</title>
-    <style>
-      html,
-      body {
-        margin: 0;
-        height: 100%;
-        background: #525659;
-      }
-      embed {
-        display: block;
-        width: 100%;
-        height: 100%;
-        border: 0;
-      }
-    </style>
+    <title>Label print preview — BridalLive Helper</title>
+    <link rel="stylesheet" href="./preview.css" />
   </head>
   <body>
-    <embed id="blh-pdf" type="application/pdf" title="Label PDF" />
+    <header class="preview-toolbar" id="blh-preview-toolbar">
+      <div class="preview-toolbar-main">
+        <h1 class="preview-title">Label print preview</h1>
+        <p class="preview-meta" id="blh-preview-meta">Loading…</p>
+      </div>
+      <div class="preview-actions">
+        <button type="button" class="preview-btn preview-btn--primary" id="blh-preview-print">
+          Print…
+        </button>
+        <button type="button" class="preview-btn" id="blh-preview-close">Close tab</button>
+      </div>
+    </header>
+
+    <aside class="preview-instructions" id="blh-preview-instructions">
+      <h2 class="preview-instructions-title">Before you print</h2>
+      <ol class="preview-instructions-list">
+        <li><strong>Scale: 100%</strong> — do not use Fit to page or Shrink to fit.</li>
+        <li><strong>Paper:</strong> US Letter (8.5″ × 11″).</li>
+        <li><strong>Labels:</strong> Avery 5160 / 8160 or compatible 30-up sheet.</li>
+        <li>Run a test print on plain paper held over a sheet to check alignment first.</li>
+      </ol>
+      <p class="preview-instructions-note" id="blh-preview-sheet-note"></p>
+    </aside>
+
+    <main class="preview-main">
+      <embed id="blh-pdf" type="application/pdf" title="Label PDF" />
+      <p class="preview-fallback" id="blh-preview-fallback" hidden>
+        Print preview expired — generate the PDF again from Labels in the side panel.
+      </p>
+    </main>
+
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

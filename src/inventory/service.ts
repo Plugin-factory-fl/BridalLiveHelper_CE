@@ -1,4 +1,4 @@
-import type { InventorySearchQuery } from '../types/inventory'
+import type { InventoryItem, InventorySearchQuery } from '../types/inventory'
 import { getMockCatalog, findDuplicateWarning } from './mock-provider'
 import { getDataSource } from '../lib/data-source'
 import { getInventoryProvider } from './provider'
@@ -13,6 +13,17 @@ export async function searchInventory(
   storeId: string,
 ): Promise<InventorySearchResult> {
   return getInventoryProvider().search(query, storeId)
+}
+
+/** Full mock catalog A–Z by item name (style); used for browse UI in the panel. */
+export async function listCatalogItems(_storeId: string): Promise<InventoryItem[]> {
+  if (getDataSource() === 'mock') {
+    return [...getMockCatalog()].sort((a, b) =>
+      a.saleSearchQuery.localeCompare(b.saleSearchQuery, undefined, { sensitivity: 'base' }),
+    )
+  }
+  const { items } = await searchInventory({}, _storeId)
+  return items
 }
 
 export async function createVariant(

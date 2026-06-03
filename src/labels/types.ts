@@ -10,21 +10,24 @@ export type LabelPayload = {
   size: string
   color: string
   price: string
+  /** Resolved drawer id from `style-layouts.ts`. */
+  styleLayoutId: string
 }
 
 export type ReceivingVoucherLine = LabelLineItem & {
-  department?: Department
   style?: string
   vendor?: string
   selected?: boolean
 }
 
 export type LabelPrintOptions = {
-  department: Department
+  styleLayoutId: string
   items: LabelLineItem[]
   averyStartRow?: number
   averyStartColumn?: number
   sheetId?: string
+  /** Fallback department when a line has none (reprint). */
+  fallbackDepartment?: Department
 }
 
 export type LabelPrintBatchResult = {
@@ -33,6 +36,15 @@ export type LabelPrintBatchResult = {
   labelCount: number
   pageCount?: number
   pdfOpened?: boolean
+}
+
+export type PrintPreviewMeta = {
+  labelCount: number
+  pageCount: number
+  sheetName: string
+  layoutSummary: string
+  averyStart: string
+  generatedAt: string
 }
 
 export type { LabelLineItem, LabelTemplate }

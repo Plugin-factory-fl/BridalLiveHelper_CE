@@ -28,15 +28,19 @@ export type LabelLineItem = {
   style?: string
   size?: string
   color?: string
+  department?: Department
 }
 
 export type LabelPrintBatchRequest = {
-  department: Department
+  /** Layout selection or `auto-by-department`. */
+  styleLayoutId: string
   items: LabelLineItem[]
   averyStartRow?: number
   averyStartColumn?: number
   /** Avery sheet preset id; defaults to avery-5160. */
   sheetId?: string
+  /** Used when reprinting a single item without department on the line. */
+  fallbackDepartment?: Department
 }
 
 export type LabelPrintBatchResult = {

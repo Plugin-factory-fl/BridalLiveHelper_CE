@@ -64,6 +64,8 @@ export const STORAGE_KEYS = {
   helperPrintPreview: 'helperPrintPreview',
   /** Uint8 array stored while the print-preview tab is open. */
   helperPrintPdfBytes: 'helperPrintPdfBytes',
+  /** Summary shown on the print-preview page. */
+  helperPrintPreviewMeta: 'helperPrintPreviewMeta',
 } as const
 
 export type PrintPreviewSession = {

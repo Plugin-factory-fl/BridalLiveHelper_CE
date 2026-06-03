@@ -24,7 +24,7 @@ Panel views  →  MSG.*  →  content/bridge.ts  →  */service.ts  →  getXxxP
 ### Inventory & special orders
 
 - [x] Search by style, vendor, size, color, item #
-- [x] Results table with copy / use-as-source / to-order (to-order needs selectors)
+- [x] Results table with copy / use-as-source / add-to-order (sale search selector wired)
 - [x] Duplicate warning on search (style + size + color)
 - [x] Live duplicate preview on variant form
 - [x] Add variant form + clone-from-source field

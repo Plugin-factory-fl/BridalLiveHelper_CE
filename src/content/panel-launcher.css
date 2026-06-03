@@ -1,7 +1,5 @@
 .blh-open-panel-btn {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
   z-index: 2147483000;
   width: 48px;
   height: 48px;
@@ -11,7 +9,9 @@
   color: #fff;
   font-size: 14px;
   font-weight: 700;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
   box-shadow: 0 4px 16px rgba(91, 61, 102, 0.35);
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
@@ -19,6 +19,13 @@
 .blh-open-panel-btn:hover {
   transform: scale(1.05);
   box-shadow: 0 6px 20px rgba(91, 61, 102, 0.45);
+}
+
+.blh-open-panel-btn--dragging,
+.blh-open-panel-btn--dragging:hover {
+  cursor: grabbing;
+  transform: none;
+  transition: none;
 }
 
 .blh-open-panel-btn--open {

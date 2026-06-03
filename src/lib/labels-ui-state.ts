@@ -1,11 +1,12 @@
 import { STORAGE_KEYS } from './config'
+import { AUTO_STYLE_LAYOUT_ID } from '../labels/style-layouts'
 
 export type LabelsUiState = {
   startRow: number
   startCol: number
   /** itemNumber → checked (only stored when explicitly false). */
   receivingSelected: Record<string, boolean>
-  reprintDepartment: string
+  labelStyleLayoutId: string
   reprintItemNumber: string
   reprintQuantity: number
   statusText: string
@@ -18,7 +19,7 @@ const DEFAULTS: LabelsUiState = {
   startRow: 1,
   startCol: 1,
   receivingSelected: {},
-  reprintDepartment: 'Dress',
+  labelStyleLayoutId: AUTO_STYLE_LAYOUT_ID,
   reprintItemNumber: '',
   reprintQuantity: 1,
   statusText: '',

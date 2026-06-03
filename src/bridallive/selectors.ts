@@ -7,6 +7,12 @@
 export type OrderSelectors = {
   /** Active order line item number input */
   itemNumberInput: string | null
+  /** Sale search settings — "Item number" radio (barcode = true) */
+  itemSearchModeItemNumber: string | null
+  /** Sale search settings — "Item name" radio (barcode = false) */
+  itemSearchModeItemName: string | null
+  /** Opens sale search settings dropdown (if separate from mode buttons) */
+  itemSearchSettingsToggle: string | null
   styleInput: string | null
   sizeInput: string | null
   colorInput: string | null
@@ -25,7 +31,13 @@ export const BL_SELECTORS: {
   receiving: ReceivingSelectors
 } = {
   order: {
-    itemNumberInput: null,
+    /** Sale / POS — "Search for an item by name" typeahead (ng-model itemsSearchSettings.query) */
+    itemNumberInput: 'input[ng-model="itemsSearchSettings.query"]',
+    itemSearchModeItemNumber:
+      'input[type="radio"][ng-model="itemsSearchSettings.field"][value="itemNumber"], button[ng-click="itemsSearchSettings.barcode = true"]',
+    itemSearchModeItemName:
+      'input[type="radio"][ng-model="itemsSearchSettings.field"][value="itemName"], button[ng-click="itemsSearchSettings.barcode = false"]',
+    itemSearchSettingsToggle: 'button.items-search_settings.dropdown-toggle',
     styleInput: null,
     sizeInput: null,
     colorInput: null,

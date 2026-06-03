@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "dev": "vite",
-    "package:zip": "npm run build && node scripts/zip-dist.mjs"
+    "package:zip": "npm run build && node scripts/zip-dist.mjs",
+    "mock-catalog:import": "node scripts/import-mock-catalog.mjs"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.4.0",

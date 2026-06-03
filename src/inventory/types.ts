@@ -15,6 +15,7 @@ export type InventoryCreateVariantPayload = {
 export type InventoryCreateVariantResult = {
   ok: boolean
   itemNumber?: string
+  saleSearchQuery?: string
   message: string
 }
 

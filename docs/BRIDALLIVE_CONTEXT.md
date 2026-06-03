@@ -15,27 +15,29 @@ The extension classifies the active BridalLive screen using **URL and title heur
 
 **Settings → Dev screen override** forces a screen type without changing the URL. Useful before selectors exist.
 
-## TODO: confirm with live app
+## Confirmed selectors (Sale / POS)
 
-When you have access to `https://app.bridallive.com`, record:
+### Sale transaction (e.g. Sale #24818)
 
-1. Exact pathname/hash for:
-   - Create / edit order
-   - Receiving voucher list and detail
-   - Inventory item search and edit
-2. CSS selectors for:
-   - Order line item number input
-   - Receiving line table (SKU, qty)
-   - Item duplicate / edit / save actions
-3. Whether BridalLive is a SPA (History API) — already handled via `pushState` hooks.
+- **Screen type:** `order` (URL/title heuristics match `sale`, `transaction`, etc.)
+- **Add line search:** item name / number typeahead on the sale footer
+  - Selector: `input[ng-model="itemsSearchSettings.query"]`
+  - Placeholder: `Search for an item by name`
+  - Angular: `item-search-typeahead-grid`, on-select `chooseItem`
+- **Quick-add modal button (optional):** `button[secured-by="QUICK_ADD_ITEM"]` → `openAddNewItemModal()` — not used for apply; opens manual add modal
 
-Add findings to this file as:
+Extension **Add to order**: (1) open gear settings panel, (2) select **Item number** radio (`itemsSearchSettings.field = 'itemNumber'`), (3) close settings, (4) fill search with item # (e.g. `49153`), (5) if the typeahead **grid** (columns Item # / Color / Size / …) shows **exactly one data row**, click that row (or call `chooseItem` on scope). Header row is ignored. Multiple data rows are left for staff to pick manually.
 
-```markdown
-### Order create
-- URL: `/...`
-- Item # input: `#...` or `[name="..."]`
-```
+Debug logs (`[BridalLiveHelper] step 5…`) appear in the **BridalLive tab** DevTools console, not the side panel.
+
+- Item number mode: `input[type="radio"][ng-model="itemsSearchSettings.field"][value="itemNumber"]`
+- Item name mode: same `ng-model`, `value="itemName"` (confirm in DevTools if label differs)
+
+### Still TODO
+
+1. Exact pathname/hash patterns for sale vs special order vs POS (record samples)
+2. Receiving voucher line table selectors
+3. Style / size / color fields on sale lines (for richer prefill), if distinct from search query
 
 ## iframe panel URL
 

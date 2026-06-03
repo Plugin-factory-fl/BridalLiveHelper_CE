@@ -1,9 +1,15 @@
-import { DEPARTMENTS } from '../../lib/config'
 import { loadLabelsUiState, saveLabelsUiState } from '../../lib/labels-ui-state'
 import { MSG } from '../../lib/messages'
+import type { LabelLineItem } from '../../api/types'
 import type { ReceivingVoucherLine } from '../../labels/types'
 import { printLabelBatch } from '../../labels/print-batch'
 import { AVERY_5160 } from '../../labels/templates'
+import {
+  AUTO_STYLE_LAYOUT_ID,
+  describeLayoutSelection,
+  getLabelStyleLayout,
+  layoutOptionsForDropdown,
+} from '../../labels/style-layouts'
 import { getPanelContext } from '../panel-context'
 import { sendToContent } from '../bridge-client'
 import type { ViewRender } from '../router'
@@ -19,16 +25,43 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function buildStyleLayoutOptions(): string {
+  const groups = new Map<string, ReturnType<typeof layoutOptionsForDropdown>>()
+  for (const opt of layoutOptionsForDropdown()) {
+    const list = groups.get(opt.group) ?? []
+    list.push(opt)
+    groups.set(opt.group, list)
+  }
+  return [...groups.entries()]
+    .map(
+      ([group, opts]) =>
+        `<optgroup label="${escapeHtml(group)}">${opts
+          .map(
+            (o) =>
+              `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`,
+          )
+          .join('')}</optgroup>`,
+    )
+    .join('')
+}
+
 export const renderLabels: ViewRender = (root) => {
   const section = document.createElement('section')
   section.className = 'view view-labels'
-  const deptOptions = DEPARTMENTS.map(
-    (d) => `<option value="${d}">${d}</option>`,
-  ).join('')
+  const styleOptions = buildStyleLayoutOptions()
 
   section.innerHTML = `
     <h2 class="view-title">Labels</h2>
-    <p class="muted small">Avery 5160 sheet · PDF opens in a new tab — print at 100% scale.</p>
+    <p class="muted small">${escapeHtml(AVERY_5160.name)} · PDF opens in a print-preview tab.</p>
+
+    <fieldset class="fieldset labels-block labels-block--style">
+      <legend>Label style layout</legend>
+      <label class="label-style-picker">
+        <span class="label-style-picker-label">Design</span>
+        <select id="blh-label-style-layout" name="styleLayout">${styleOptions}</select>
+      </label>
+      <div id="blh-label-style-preview" class="label-style-preview" aria-live="polite"></div>
+    </fieldset>
 
     <fieldset class="fieldset labels-block">
       <legend>Sheet start position</legend>
@@ -44,7 +77,7 @@ export const renderLabels: ViewRender = (root) => {
         <h3 class="subheading" id="blh-receiving-heading">Receiving voucher</h3>
         <span class="labels-badge labels-badge--primary">Main workflow</span>
       </div>
-      <p class="labels-lead">When stock arrives, select lines on the voucher and bulk-print labels (one label per received quantity).</p>
+      <p class="labels-lead">Select lines on the voucher and bulk-print labels — one label per received quantity. Each line uses its own department when Auto layout is selected.</p>
       <div id="blh-labels-context-banner" class="banner banner-info" hidden></div>
       <p class="muted small" id="blh-receiving-hint">Loading voucher lines…</p>
       <div class="btn-row">
@@ -59,11 +92,8 @@ export const renderLabels: ViewRender = (root) => {
 
     <section class="labels-block labels-block--reprint" aria-labelledby="blh-reprint-heading">
       <h3 class="subheading" id="blh-reprint-heading">Reprint label</h3>
-      <p class="muted small">One-off reprint when a tag was torn off or you need a single label from inventory.</p>
+      <p class="muted small">One-off reprint when a tag was torn off. Department is inferred from the item # when using Auto layout.</p>
       <form id="blh-labels-reprint-form" class="form-grid form-grid--compact">
-        <label>Department
-          <select name="department">${deptOptions}</select>
-        </label>
         <label>Item # <input name="itemNumber" type="text" placeholder="DR-10042" autocomplete="off" /></label>
         <label>Quantity <input name="quantity" type="number" min="1" value="1" /></label>
         <button type="submit" class="btn btn-reprint">Reprint (PDF)</button>
@@ -77,6 +107,7 @@ export const renderLabels: ViewRender = (root) => {
 
   let startRow = 1
   let startCol = 1
+  let labelStyleLayoutId = AUTO_STYLE_LAYOUT_ID
   let receivingLines: ReceivingVoucherLine[] = []
   let selectionByItem: Record<string, boolean> = {}
 
@@ -84,6 +115,8 @@ export const renderLabels: ViewRender = (root) => {
   const startRowEl = section.querySelector('#blh-start-row') as HTMLElement
   const startColEl = section.querySelector('#blh-start-col') as HTMLElement
   const reprintForm = section.querySelector('#blh-labels-reprint-form') as HTMLFormElement
+  const styleSelect = section.querySelector('#blh-label-style-layout') as HTMLSelectElement
+  const stylePreview = section.querySelector('#blh-label-style-preview') as HTMLElement
   const scrollRoot = document.getElementById('blh-view-root')
 
   const persistUiState = () => {
@@ -92,7 +125,7 @@ export const renderLabels: ViewRender = (root) => {
       startRow,
       startCol,
       receivingSelected: { ...selectionByItem },
-      reprintDepartment: String(fd.get('department') ?? 'Dress'),
+      labelStyleLayoutId,
       reprintItemNumber: String(fd.get('itemNumber') ?? ''),
       reprintQuantity: Number(fd.get('quantity')) || 1,
       statusText: statusEl.textContent ?? '',
@@ -103,6 +136,47 @@ export const renderLabels: ViewRender = (root) => {
           : '',
       scrollTop: scrollRoot?.scrollTop ?? 0,
     })
+  }
+
+  const paintStylePreview = () => {
+    const selection = labelStyleLayoutId
+    if (selection === AUTO_STYLE_LAYOUT_ID) {
+      stylePreview.innerHTML = `
+        <p class="label-style-preview-title">Auto by department</p>
+        <p class="label-style-preview-desc">${escapeHtml(describeLayoutSelection(selection))}</p>
+        <ul class="label-style-preview-fields">
+          <li>Dress → Dress — Classic tag</li>
+          <li>Shoes → Shoes — Standard</li>
+          <li>Jewelry → Jewelry — Standard</li>
+        </ul>
+        <p class="label-style-preview-note muted small">Best for mixed receiving vouchers.</p>
+      `
+      return
+    }
+
+    const layout = getLabelStyleLayout(selection)
+    if (!layout) {
+      stylePreview.innerHTML = ''
+      return
+    }
+
+    const statusBadge =
+      layout.status === 'placeholder'
+        ? '<span class="label-style-preview-badge">Placeholder — swap when client design arrives</span>'
+        : '<span class="label-style-preview-badge label-style-preview-badge--client">Client design</span>'
+
+    stylePreview.innerHTML = `
+      <div class="label-style-preview-header">
+        <p class="label-style-preview-title">${escapeHtml(layout.name)}</p>
+        <span class="tag">${escapeHtml(layout.department)}</span>
+      </div>
+      ${statusBadge}
+      <p class="label-style-preview-desc">${escapeHtml(layout.description)}</p>
+      <p class="label-style-preview-fields-label">Fields on label</p>
+      <ul class="label-style-preview-fields">
+        ${layout.fields.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}
+      </ul>
+    `
   }
 
   const paintStartLabels = () => {
@@ -140,13 +214,14 @@ export const renderLabels: ViewRender = (root) => {
     const saved = await loadLabelsUiState()
     startRow = saved.startRow
     startCol = saved.startCol
+    labelStyleLayoutId = saved.labelStyleLayoutId ?? AUTO_STYLE_LAYOUT_ID
     selectionByItem = { ...saved.receivingSelected }
+    styleSelect.value = labelStyleLayoutId
     paintStartLabels()
+    paintStylePreview()
 
-    const deptSelect = reprintForm.elements.namedItem('department') as HTMLSelectElement
     const itemInput = reprintForm.elements.namedItem('itemNumber') as HTMLInputElement
     const qtyInput = reprintForm.elements.namedItem('quantity') as HTMLInputElement
-    if (deptSelect) deptSelect.value = saved.reprintDepartment
     if (itemInput) itemInput.value = saved.reprintItemNumber
     if (qtyInput) qtyInput.value = String(saved.reprintQuantity)
 
@@ -229,18 +304,12 @@ export const renderLabels: ViewRender = (root) => {
     persistUiState()
   }
 
-  const runPrint = async (
-    items: {
-      itemNumber: string
-      quantity: number
-      style?: string
-      size?: string
-      color?: string
-      department?: string
-    }[],
-    department: (typeof DEPARTMENTS)[number],
-    emptyMessage: string,
-  ) => {
+  const reprintFallbackDepartment = () => {
+    const layout = getLabelStyleLayout(labelStyleLayoutId)
+    return layout?.department ?? 'Dress'
+  }
+
+  const runPrint = async (items: LabelLineItem[], emptyMessage: string) => {
     if (items.length === 0) {
       setStatus(emptyMessage, 'error')
       return
@@ -248,18 +317,25 @@ export const renderLabels: ViewRender = (root) => {
     persistUiState()
     setStatus('Generating PDF…', '')
     try {
-      const labels = await printLabelBatch({
-        department,
+      const result = await printLabelBatch({
+        styleLayoutId: labelStyleLayoutId,
         averyStartRow: startRow,
         averyStartColumn: startCol,
         sheetId: AVERY_5160.id,
         items,
+        fallbackDepartment: reprintFallbackDepartment(),
       })
-      setStatus(labels.message, labels.ok ? 'success' : 'error')
+      setStatus(result.message, result.ok ? 'success' : 'error')
     } catch (e) {
       setStatus(e instanceof Error ? e.message : 'Print failed', 'error')
     }
   }
+
+  styleSelect.addEventListener('change', () => {
+    labelStyleLayoutId = styleSelect.value
+    paintStylePreview()
+    persistUiState()
+  })
 
   void (async () => {
     await applySavedUiState()
@@ -284,7 +360,6 @@ export const renderLabels: ViewRender = (root) => {
   reprintForm.addEventListener('submit', async (e) => {
     e.preventDefault()
     const fd = new FormData(reprintForm)
-    const department = String(fd.get('department')) as (typeof DEPARTMENTS)[number]
     await runPrint(
       [
         {
@@ -292,7 +367,6 @@ export const renderLabels: ViewRender = (root) => {
           quantity: Number(fd.get('quantity')) || 1,
         },
       ],
-      department,
       'Enter an item # to reprint.',
     )
   })
@@ -317,8 +391,6 @@ export const renderLabels: ViewRender = (root) => {
 
   section.querySelector('#blh-labels-receiving')?.addEventListener('click', async () => {
     const selected = receivingLines.filter((l) => l.selected !== false)
-    const primaryDept =
-      (selected.find((l) => l.department)?.department as (typeof DEPARTMENTS)[number]) ?? 'Dress'
     await runPrint(
       selected.map((l) => ({
         itemNumber: l.itemNumber,
@@ -328,7 +400,6 @@ export const renderLabels: ViewRender = (root) => {
         color: l.color,
         department: l.department,
       })),
-      primaryDept,
       'Select at least one receiving line.',
     )
   })

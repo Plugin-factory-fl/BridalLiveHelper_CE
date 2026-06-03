@@ -1,4 +1,6 @@
 import type { InventoryItem, InventorySearchQuery } from '../types/inventory'
+import { MOCK_CATALOG_ITEMS } from './mock-catalog-items'
+import { buildSaleSearchQuery } from './sale-search-query'
 import type { InventoryProvider } from './provider'
 import type {
   InventoryCreateVariantPayload,
@@ -11,117 +13,8 @@ export const MOCK_LOCATIONS = [
   { id: 'store-2', name: 'Second Location' },
 ] as const
 
-/** In-memory catalog for MVP demos; new variants are appended until reload. */
-const MOCK_ITEMS: InventoryItem[] = [
-  {
-    id: '1',
-    itemNumber: 'DR-10042',
-    style: 'Iris',
-    vendor: 'Sample Designer',
-    department: 'Dress',
-    size: '6',
-    color: 'Light Pink',
-    locationId: 'store-1',
-    locationName: 'Main Boutique',
-    onHand: 0,
-  },
-  {
-    id: '2',
-    itemNumber: 'DR-10043',
-    style: 'Iris',
-    vendor: 'Sample Designer',
-    department: 'Dress',
-    size: '8',
-    color: 'Light Pink',
-    locationId: 'store-1',
-    locationName: 'Main Boutique',
-    onHand: 1,
-  },
-  {
-    id: '2b',
-    itemNumber: 'DR-10043',
-    style: 'Iris',
-    vendor: 'Sample Designer',
-    department: 'Dress',
-    size: '8',
-    color: 'Light Pink',
-    locationId: 'store-2',
-    locationName: 'Second Location',
-    onHand: 2,
-  },
-  {
-    id: '3',
-    itemNumber: 'DR-10044',
-    style: 'Iris',
-    vendor: 'Sample Designer',
-    department: 'Dress',
-    size: '10',
-    color: 'Ivory',
-    locationId: 'store-1',
-    locationName: 'Main Boutique',
-    onHand: 0,
-  },
-  {
-    id: '4',
-    itemNumber: 'DR-10045',
-    style: 'Iris',
-    vendor: 'Sample Designer',
-    department: 'Dress',
-    size: '12',
-    color: 'Champagne',
-    locationId: 'store-2',
-    locationName: 'Second Location',
-    onHand: 2,
-  },
-  {
-    id: '5',
-    itemNumber: 'SH-22001',
-    style: 'Bella',
-    vendor: 'Shoe Co',
-    department: 'Shoes',
-    size: '8',
-    color: 'Ivory',
-    locationId: 'store-1',
-    locationName: 'Main Boutique',
-    onHand: 2,
-  },
-  {
-    id: '6',
-    itemNumber: 'SH-22002',
-    style: 'Bella',
-    vendor: 'Shoe Co',
-    department: 'Shoes',
-    size: '9',
-    color: 'Ivory',
-    locationId: 'store-1',
-    locationName: 'Main Boutique',
-    onHand: 1,
-  },
-  {
-    id: '6b',
-    itemNumber: 'SH-22002',
-    style: 'Bella',
-    vendor: 'Shoe Co',
-    department: 'Shoes',
-    size: '9',
-    color: 'Ivory',
-    locationId: 'store-2',
-    locationName: 'Second Location',
-    onHand: 0,
-  },
-  {
-    id: '7',
-    itemNumber: 'JW-33001',
-    style: 'Luna Pendant',
-    vendor: 'Gem Artisans',
-    department: 'Jewelry',
-    size: 'OS',
-    color: 'Silver',
-    locationId: 'store-2',
-    locationName: 'Second Location',
-    onHand: 4,
-  },
-]
+/** Real BL export (items.xls) + variants appended in-session until reload. */
+const MOCK_ITEMS: InventoryItem[] = [...MOCK_CATALOG_ITEMS]
 
 function normalizeQuery(query: InventorySearchQuery) {
   return {
@@ -205,11 +98,13 @@ async function createVariant(
         : 'DR'
   const itemNumber = `${deptPrefix}-${Math.floor(10000 + Math.random() * 90000)}`
 
+  const vendor = source?.vendor ?? 'Unknown vendor'
   const newItem: InventoryItem = {
     id: `mock-${Date.now()}`,
     itemNumber,
     style: payload.styleId,
-    vendor: source?.vendor ?? 'Unknown vendor',
+    vendor,
+    saleSearchQuery: buildSaleSearchQuery(vendor, itemNumber),
     department: source?.department ?? 'Dress',
     size: payload.size,
     color: payload.color,
@@ -225,7 +120,12 @@ async function createVariant(
   }
   message += '. Phase 2 will save to BridalLive.'
 
-  return { ok: true, itemNumber, message }
+  return {
+    ok: true,
+    itemNumber,
+    saleSearchQuery: newItem.saleSearchQuery,
+    message,
+  }
 }
 
 export const mockInventoryProvider: InventoryProvider = {

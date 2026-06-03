@@ -2,9 +2,10 @@ import { getReceivingLines, listLabelTemplates } from '../labels/service'
 import {
   checkDuplicateVariant,
   createVariant,
+  listCatalogItems,
   searchInventory,
 } from '../inventory/service'
-import { applyItemNumberToOrder } from './order-context'
+import { applySaleSearchToOrder } from './order-context'
 import { MSG, type ExtensionMessage, type ExtensionResponse } from '../lib/messages'
 import { loadPreferences } from '../lib/storage'
 import { detectContext, parseDevScreenOverride } from './context'
@@ -56,6 +57,12 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
       return { ok: true, search }
     }
 
+    case MSG.INVENTORY_LIST_CATALOG: {
+      const prefs = await loadPreferences()
+      const catalogItems = await listCatalogItems(prefs.mockStoreId)
+      return { ok: true, catalogItems }
+    }
+
     case MSG.INVENTORY_CHECK_DUPLICATE: {
       const prefs = await loadPreferences()
       const duplicateWarning = await checkDuplicateVariant(
@@ -68,8 +75,10 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
     }
 
     case MSG.APPLY_ITEM_TO_ORDER: {
-      const result = applyItemNumberToOrder(message.itemNumber)
-      return result.ok ? { ok: true } : { ok: false, error: result.error }
+      const result = await applySaleSearchToOrder(message.saleSearchQuery)
+      return result.ok
+        ? { ok: true, autoSelected: result.autoSelected }
+        : { ok: false, error: result.error }
     }
 
     case MSG.INVENTORY_CREATE_VARIANT: {

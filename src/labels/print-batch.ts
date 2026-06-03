@@ -1,11 +1,29 @@
 import type { LabelPrintBatchRequest } from '../api/types'
 import { getMockCatalog } from '../inventory/mock-provider'
 import { getDataSource } from '../lib/data-source'
+import {
+  AUTO_STYLE_LAYOUT_ID,
+  describeLayoutSelection,
+  getLabelStyleLayout,
+} from './style-layouts'
 import { expandLabelLines } from './enrich'
 import { pageCountForLabels } from './layout'
 import { buildLabelPdf, openPdfInNewTab } from './pdf'
 import { DEFAULT_SHEET, getSheetSpec } from './templates'
 import type { LabelPrintBatchResult } from './types'
+
+function layoutSummaryForRequest(
+  styleLayoutId: string,
+  uniqueLayoutIds: string[],
+): string {
+  if (styleLayoutId === AUTO_STYLE_LAYOUT_ID) {
+    const names = uniqueLayoutIds
+      .map((id) => getLabelStyleLayout(id)?.name ?? id)
+      .filter(Boolean)
+    return names.length > 0 ? `Auto (${names.join(', ')})` : 'Auto by department'
+  }
+  return getLabelStyleLayout(styleLayoutId)?.name ?? styleLayoutId
+}
 
 /**
  * Generate Avery PDF and open print tab. Runs in the side panel (not content script)
@@ -29,8 +47,14 @@ export async function printLabelBatch(
   const catalog = getMockCatalog()
   const startRow = request.averyStartRow ?? 1
   const startCol = request.averyStartColumn ?? 1
+  const styleLayoutId = request.styleLayoutId ?? AUTO_STYLE_LAYOUT_ID
 
-  const labels = expandLabelLines(request.items, catalog, request.department)
+  const labels = expandLabelLines(
+    request.items,
+    catalog,
+    styleLayoutId,
+    request.fallbackDepartment,
+  )
   if (labels.length === 0) {
     return {
       ok: false,
@@ -40,18 +64,32 @@ export async function printLabelBatch(
     }
   }
 
+  const uniqueLayoutIds = [...new Set(labels.map((l) => l.styleLayoutId))]
   const pdfBytes = await buildLabelPdf(labels, sheet, startRow, startCol)
-  const openResult = await openPdfInNewTab(pdfBytes)
   const pageCount = pageCountForLabels(
     labels.length,
     sheet,
     (startRow - 1) * sheet.columns + (startCol - 1),
   )
 
+  const openResult = await openPdfInNewTab(pdfBytes, {
+    labelCount: labels.length,
+    pageCount,
+    sheetName: sheet.name,
+    layoutSummary: layoutSummaryForRequest(styleLayoutId, uniqueLayoutIds),
+    averyStart: `Row ${startRow}, column ${startCol}`,
+    generatedAt: new Date().toISOString(),
+  })
+
   const mode =
     getDataSource() === 'mock'
-      ? 'Print PDF at 100% scale on Avery 5160.'
+      ? 'Print at 100% scale — do not use Fit to page.'
       : 'Verify alignment on a test sheet first.'
+
+  const layoutHint =
+    styleLayoutId === AUTO_STYLE_LAYOUT_ID
+      ? describeLayoutSelection(styleLayoutId)
+      : (getLabelStyleLayout(styleLayoutId)?.name ?? '')
 
   return {
     ok: true,
@@ -59,7 +97,7 @@ export async function printLabelBatch(
     pageCount,
     pdfOpened: openResult.ok,
     message: openResult.ok
-      ? `Generated ${labels.length} label(s) on ${pageCount} page(s). ${mode}`
+      ? `Generated ${labels.length} label(s) on ${pageCount} page(s). ${layoutHint} ${mode}`
       : `Generated PDF (${labels.length} labels) but could not open tab: ${openResult.error}`,
   }
 }

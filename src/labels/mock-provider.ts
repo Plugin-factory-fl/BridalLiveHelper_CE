@@ -3,21 +3,24 @@ import { getMockCatalog } from '../inventory/mock-provider'
 import type { LabelsProvider } from './provider'
 import type { ReceivingVoucherLine } from './types'
 import { enrichFromCatalog } from './enrich'
+import { AUTO_STYLE_LAYOUT_ID } from './style-layouts'
 import { MOCK_LABEL_TEMPLATES } from './templates'
 
 /** Sample voucher lines — Phase 2 replaces with DOM / API scrape. */
 const MOCK_VOUCHER_LINES: ReceivingVoucherLine[] = [
-  { itemNumber: 'DR-10042', quantity: 2 },
-  { itemNumber: 'DR-10043', quantity: 1 },
-  { itemNumber: 'DR-10045', quantity: 2 },
-  { itemNumber: 'SH-22001', quantity: 3 },
-  { itemNumber: 'JW-33001', quantity: 1 },
+  { itemNumber: '49154', quantity: 2 },
+  { itemNumber: '49153', quantity: 1 },
+  { itemNumber: '49152', quantity: 2 },
+  { itemNumber: '49151', quantity: 1 },
+  { itemNumber: '49150', quantity: 3 },
 ]
 
 async function getReceivingLines(): Promise<ReceivingVoucherLine[]> {
   const catalog = getMockCatalog()
   return MOCK_VOUCHER_LINES.map((line) => {
-    const enriched = enrichFromCatalog(line, catalog)
+    const enriched = enrichFromCatalog(line, catalog, {
+      styleLayoutSelection: AUTO_STYLE_LAYOUT_ID,
+    })
     return {
       ...line,
       style: enriched.style,

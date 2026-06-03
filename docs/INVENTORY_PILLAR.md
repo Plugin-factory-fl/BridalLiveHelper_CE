@@ -17,7 +17,7 @@ See [MVP_ROADMAP.md](./MVP_ROADMAP.md) for the full checklist and demo script.
 | Requirement | MVP status |
 |---------------|------------|
 | Side workstation on orders | Done |
-| Search by style, vendor, size, color, item # | Done (mock catalog, 7+ SKUs) |
+| Search by style, vendor, size, color, item # | Done (100 real SKUs from `items.xls` in mock catalog) |
 | Duplicate warning | Done |
 | Add variants + clone from source | Done (mock; appends to in-memory catalog) |
 | Order context banner + prefill | Done (selectors optional) |
@@ -37,7 +37,7 @@ Panel → MSG.* → bridge → inventory/service.ts → getInventoryProvider()
 
 1. `app.bridallive.com` → open side panel
 2. Settings → Dev override → **Order / POS**
-3. Inventory → search `Iris`, size `8`, color `Light Pink` → duplicate warning
+3. Inventory → search item # `49153` or style `CB91978J` → pick a row → **Add to order** on a live Sale
 4. Add variant size `14` → new mock item #; search again to see it listed
 5. **Use as source** on a row → variant form prefilled
 

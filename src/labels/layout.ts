@@ -6,7 +6,7 @@ export type GridSlot = {
   index: number
 }
 
-/** Convert 1-based Avery start row/col to first slot index (player sheet. */
+/** Convert 1-based Avery start row/col to first slot index (per sheet). */
 export function startSlotIndex(
   sheet: AverySheetSpec,
   startRow = 1,

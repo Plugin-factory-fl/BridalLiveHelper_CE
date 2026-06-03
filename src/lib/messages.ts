@@ -11,6 +11,7 @@ export const MSG = {
   NAVIGATE_PANEL_VIEW: 'NAVIGATE_PANEL_VIEW',
   COPY_TO_CLIPBOARD: 'COPY_TO_CLIPBOARD',
   INVENTORY_SEARCH: 'INVENTORY_SEARCH',
+  INVENTORY_LIST_CATALOG: 'INVENTORY_LIST_CATALOG',
   INVENTORY_CHECK_DUPLICATE: 'INVENTORY_CHECK_DUPLICATE',
   INVENTORY_CREATE_VARIANT: 'INVENTORY_CREATE_VARIANT',
   APPLY_ITEM_TO_ORDER: 'APPLY_ITEM_TO_ORDER',
@@ -38,6 +39,7 @@ export type InventoryCreateVariantPayload = {
 export type InventoryCreateVariantResponse = {
   ok: boolean
   itemNumber?: string
+  saleSearchQuery?: string
   message: string
 }
 
@@ -49,6 +51,7 @@ export type ExtensionMessage =
   | { type: typeof MSG.NAVIGATE_PANEL_VIEW; view: string }
   | { type: typeof MSG.COPY_TO_CLIPBOARD; text: string }
   | { type: typeof MSG.INVENTORY_SEARCH; query: InventorySearchPayload }
+  | { type: typeof MSG.INVENTORY_LIST_CATALOG }
   | {
       type: typeof MSG.INVENTORY_CHECK_DUPLICATE
       styleId: string
@@ -59,7 +62,7 @@ export type ExtensionMessage =
       type: typeof MSG.INVENTORY_CREATE_VARIANT
       payload: InventoryCreateVariantPayload
     }
-  | { type: typeof MSG.APPLY_ITEM_TO_ORDER; itemNumber: string }
+  | { type: typeof MSG.APPLY_ITEM_TO_ORDER; saleSearchQuery: string }
   | { type: typeof MSG.LABELS_PRINT_BATCH; request: LabelPrintBatchRequest }
   | { type: typeof MSG.LABELS_GET_RECEIVING_LINES }
   | { type: typeof MSG.LABELS_LIST_TEMPLATES }
@@ -67,8 +70,11 @@ export type ExtensionMessage =
 export type ExtensionResponse = {
   ok: boolean
   error?: string
+  /** True when sale typeahead had one row and we clicked it to add the line */
+  autoSelected?: boolean
   context?: BridalLiveContext
   search?: InventorySearchResponse
+  catalogItems?: InventoryItem[]
   variant?: InventoryCreateVariantResponse
   labels?: LabelPrintBatchResult
   receivingLines?: ReceivingVoucherLine[]
