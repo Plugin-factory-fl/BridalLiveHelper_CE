@@ -49,7 +49,7 @@ Panel views  →  MSG.*  →  content/bridge.ts  →  */service.ts  →  getXxxP
 - [x] `InventoryProvider` interface
 - [x] `bridallive-inventory-provider.ts` stub with swap instructions
 - [ ] `LabelsProvider` interface (same pattern)
-- [ ] Credentials UI placeholder in Settings
+- [x] Credentials UI in Settings (per-location Retailer ID + API key → `chrome.storage.local`)
 
 ## Phase 2 checklist (BridalLive API — swap only)
 

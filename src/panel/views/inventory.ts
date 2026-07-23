@@ -1,10 +1,17 @@
 import { listStores } from '../../api/client'
 import { MSG } from '../../lib/messages'
+import {
+  INVENTORY_COLUMN_IDS,
+  INVENTORY_COLUMN_LABELS,
+  loadInventoryUiState,
+  saveInventoryUiState,
+  type InventoryColumnId,
+  type InventoryUiState,
+} from '../../lib/inventory-ui-state'
 import { getPanelContext } from '../panel-context'
 import { showModal } from '../modal'
 import { copyableCellHtml, wireCopyItemButtons } from '../copy-item'
 import { wireFieldClearButtons } from '../field-clear'
-import { inventoryImageCellHtml } from '../inventory-image-cell'
 import { sendToContent } from '../bridge-client'
 import {
   INVENTORY_DEPARTMENTS,
@@ -19,6 +26,16 @@ function esc(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/"/g, '&quot;')
+}
+
+/** Two-letter location shorthand (Main Boutique → MB). Full name stays in title. */
+function locationShorthand(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  const cleaned = name.replace(/[^a-zA-Z0-9]/g, '')
+  return (cleaned.slice(0, 2) || '?').toUpperCase()
 }
 
 function prefillSearchFromOrder(form: HTMLFormElement, ctx: BridalLiveContext): void {
@@ -37,13 +54,6 @@ function prefillSearchFromOrder(form: HTMLFormElement, ctx: BridalLiveContext): 
   set('itemNumber', line.itemNumber)
 }
 
-function setFormField(form: HTMLFormElement, name: string, value: string): void {
-  const el = form.elements.namedItem(name)
-  if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) {
-    el.value = value
-  }
-}
-
 type SourceItem = Pick<
   InventoryItem,
   'itemNumber' | 'style' | 'vendor' | 'department' | 'size' | 'color'
@@ -51,12 +61,27 @@ type SourceItem = Pick<
 
 const BROWSE_PAGE_SIZE = 10
 
+type SortKey = InventoryColumnId
+type SortDir = 'asc' | 'desc'
+
+const DEFAULT_COL_WIDTHS: Record<InventoryColumnId, number> = {
+  name: 72,
+  vendorItemName: 72,
+  itemNumber: 56,
+  department: 48,
+  size: 36,
+  color: 64,
+  location: 40,
+  qty: 36,
+}
+
 function readSearchQuery(form: HTMLFormElement): InventorySearchQuery {
   const fd = new FormData(form)
   return {
     locationId: String(fd.get('locationId') ?? '').trim(),
     department: String(fd.get('department') ?? '').trim(),
     name: String(fd.get('name') ?? '').trim(),
+    vendorItemName: String(fd.get('vendorItemName') ?? '').trim(),
     vendor: String(fd.get('vendor') ?? '').trim(),
     size: String(fd.get('size') ?? '').trim(),
     color: String(fd.get('color') ?? '').trim(),
@@ -69,11 +94,43 @@ function isSearchQueryEmpty(query: InventorySearchQuery): boolean {
     !query.locationId &&
     !query.department &&
     !query.name &&
+    !query.vendorItemName &&
     !query.vendor &&
     !query.size &&
     !query.color &&
     !query.itemNumber
   )
+}
+
+function sortValue(item: InventoryItem, key: SortKey): string | number {
+  switch (key) {
+    case 'name':
+      return item.style.toLowerCase()
+    case 'vendorItemName':
+      return item.vendorItemName.toLowerCase()
+    case 'itemNumber':
+      return item.itemNumber.toLowerCase()
+    case 'department':
+      return item.department.toLowerCase()
+    case 'size':
+      return item.size.toLowerCase()
+    case 'color':
+      return item.color.toLowerCase()
+    case 'location':
+      return item.locationName.toLowerCase()
+    case 'qty':
+      return item.onHand
+  }
+}
+
+function sortItems(items: InventoryItem[], key: SortKey, dir: SortDir): InventoryItem[] {
+  const mult = dir === 'asc' ? 1 : -1
+  return [...items].sort((a, b) => {
+    const av = sortValue(a, key)
+    const bv = sortValue(b, key)
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * mult
+    return String(av).localeCompare(String(bv)) * mult
+  })
 }
 
 const departmentOptionsHtml = [
@@ -115,6 +172,18 @@ export const renderInventory: ViewRender = (root) => {
           <button type="button" class="field-clear-btn" hidden aria-label="Clear name" title="Clear">×</button>
         </span>
       </label>
+      <label>Vendor item name
+        <span class="field-clear-wrap">
+          <input
+            name="vendorItemName"
+            type="text"
+            placeholder="j879"
+            title="BL vendor item name (private label / manufacturer name)"
+            autocomplete="off"
+          />
+          <button type="button" class="field-clear-btn" hidden aria-label="Clear vendor item name" title="Clear">×</button>
+        </span>
+      </label>
       <label>Item #
         <span class="field-clear-wrap">
           <input name="itemNumber" type="text" inputmode="numeric" autocomplete="off" />
@@ -144,7 +213,7 @@ export const renderInventory: ViewRender = (root) => {
 
     <section class="inv-browse" id="blh-inv-browse" hidden aria-labelledby="blh-inv-browse-heading">
       <h3 class="subheading" id="blh-inv-browse-heading">Browse catalog</h3>
-      <p class="muted small">Leave search fields empty and press Search · Sorted A–Z by item # · 10 per page</p>
+      <p class="muted small">Leave search fields empty and press Search · Click a column header to sort · 10 per page</p>
       <div id="blh-inv-browse-table" class="inv-browse-table-wrap"></div>
       <div class="inv-browse-pager btn-row">
         <button type="button" class="btn btn-ghost btn-sm" id="blh-inv-page-prev" disabled>Previous</button>
@@ -175,10 +244,32 @@ export const renderInventory: ViewRender = (root) => {
 
   let currentStoreId = 'store-1'
   let catalogItems: InventoryItem[] = []
+  let searchItems: InventoryItem[] = []
   let browsePage = 1
+  let sortKey: SortKey = 'itemNumber'
+  let sortDir: SortDir = 'asc'
+  let uiState: InventoryUiState = {
+    columns: {
+      name: true,
+      vendorItemName: true,
+      itemNumber: true,
+      department: false,
+      size: true,
+      color: true,
+      location: true,
+      qty: true,
+    },
+    columnWidths: {},
+  }
+  let tableMode: 'browse' | 'search' = 'browse'
 
   void chrome.storage.local.get('mockStoreId').then((data) => {
     currentStoreId = String(data.mockStoreId ?? 'store-1')
+  })
+
+  void loadInventoryUiState().then((state) => {
+    uiState = state
+    refreshVisibleTables()
   })
 
   async function loadLocationFilterOptions(): Promise<void> {
@@ -236,25 +327,67 @@ export const renderInventory: ViewRender = (root) => {
     })
   }
 
+  function visibleColumns(): InventoryColumnId[] {
+    return INVENTORY_COLUMN_IDS.filter((id) => uiState.columns[id])
+  }
+
+  function colWidth(id: InventoryColumnId): number {
+    return uiState.columnWidths[id] ?? DEFAULT_COL_WIDTHS[id]
+  }
+
   function locationCell(item: InventoryItem): string {
     const isHere = item.locationId === currentStoreId
     const cls = isHere ? 'loc-tag loc-tag--here' : 'loc-tag loc-tag--other'
-    return `<span class="${cls}" title="${esc(item.locationName)}">${esc(item.locationName)}</span>`
+    const short = locationShorthand(item.locationName)
+    return `<span class="${cls}" title="${esc(item.locationName)}">${esc(short)}</span>`
   }
 
-  const inventoryTableHeadHtml = `
-    <tr>
-      <th class="inv-image-col">Image</th>
-      <th>Name</th>
-      <th>Item #</th>
-      <th>Dept</th>
-      <th>Size</th>
-      <th>Color</th>
-      <th>Location</th>
-      <th title="On hand quantity">Qty</th>
-      <th class="inv-actions-col" aria-label="Actions"></th>
-    </tr>
-  `
+  function sortIndicator(id: InventoryColumnId): string {
+    if (sortKey !== id) return ''
+    return sortDir === 'asc' ? ' ▲' : ' ▼'
+  }
+
+  function inventoryTableHeadHtml(cols: InventoryColumnId[]): string {
+    const ths = cols
+      .map((id) => {
+        const label = INVENTORY_COLUMN_LABELS[id]
+        const title =
+          id === 'qty'
+            ? 'On hand quantity'
+            : id === 'location'
+              ? 'Location (abbreviated)'
+              : label
+        return `<th
+          class="inv-th-sortable"
+          data-sort="${id}"
+          title="${esc(title)} — click to sort"
+          aria-sort="${sortKey === id ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}"
+        ><span class="inv-th-label">${esc(label)}${sortIndicator(id)}</span><span class="inv-col-resize" data-resize="${id}" title="Drag to resize"></span></th>`
+      })
+      .join('')
+    return `<tr>${ths}<th class="inv-actions-col" aria-label="Actions"></th></tr>`
+  }
+
+  function cellForColumn(item: InventoryItem, id: InventoryColumnId): string {
+    switch (id) {
+      case 'name':
+        return `<td class="copyable-cell inv-truncate" title="${esc(item.style)}">${copyableCellHtml(item.style, esc, 'Copy name')}</td>`
+      case 'vendorItemName':
+        return `<td class="copyable-cell inv-truncate" title="${esc(item.vendorItemName)}">${copyableCellHtml(item.vendorItemName, esc, 'Copy vendor item name')}</td>`
+      case 'itemNumber':
+        return `<td class="copyable-cell inv-truncate" title="${esc(item.itemNumber)}">${copyableCellHtml(item.itemNumber, esc, 'Copy item number')}</td>`
+      case 'department':
+        return `<td class="inv-truncate" title="${esc(item.department)}">${esc(item.department)}</td>`
+      case 'size':
+        return `<td class="inv-truncate" title="${esc(item.size)}">${esc(item.size)}</td>`
+      case 'color':
+        return `<td class="inv-truncate" title="${esc(item.color)}">${esc(item.color)}</td>`
+      case 'location':
+        return `<td class="inv-loc-cell">${locationCell(item)}</td>`
+      case 'qty':
+        return `<td class="inv-oh-cell">${item.onHand}</td>`
+    }
+  }
 
   function inventoryRowActionsHtml(item: InventoryItem, onOrder: boolean): string {
     const variant = `<button type="button" class="btn btn-add-variant btn-sm btn-icon-action" data-add-variant title="Add another size or color for this style" aria-label="Add variant">+</button>`
@@ -264,7 +397,11 @@ export const renderInventory: ViewRender = (root) => {
     return `<span class="row-actions-compact">${variant}${order}</span>`
   }
 
-  function inventoryItemRowHtml(item: InventoryItem, onOrder: boolean): string {
+  function inventoryItemRowHtml(
+    item: InventoryItem,
+    onOrder: boolean,
+    cols: InventoryColumnId[],
+  ): string {
     return `
       <tr
         class="inv-item-row"
@@ -276,14 +413,7 @@ export const renderInventory: ViewRender = (root) => {
         data-color="${esc(item.color)}"
         data-sale-query="${esc(item.saleSearchQuery)}"
       >
-        ${inventoryImageCellHtml(item, esc)}
-        <td class="copyable-cell inv-truncate" title="${esc(item.style)}">${copyableCellHtml(item.style, esc, 'Copy name')}</td>
-        <td class="copyable-cell inv-truncate" title="${esc(item.itemNumber)}">${copyableCellHtml(item.itemNumber, esc, 'Copy item number')}</td>
-        <td class="inv-truncate" title="${esc(item.department)}">${esc(item.department)}</td>
-        <td class="inv-truncate" title="${esc(item.size)}">${esc(item.size)}</td>
-        <td class="inv-truncate" title="${esc(item.color)}">${esc(item.color)}</td>
-        <td class="inv-loc-cell">${locationCell(item)}</td>
-        <td class="inv-oh-cell">${item.onHand}</td>
+        ${cols.map((id) => cellForColumn(item, id)).join('')}
         <td class="row-actions">${inventoryRowActionsHtml(item, onOrder)}</td>
       </tr>`
   }
@@ -293,27 +423,40 @@ export const renderInventory: ViewRender = (root) => {
     items: InventoryItem[],
     mode: 'browse' | 'search',
   ): void {
+    tableMode = mode
+    const cols = visibleColumns()
     const onOrder = getPanelContext()?.screen === 'order'
+    const colgroup = cols
+      .map(
+        (id) =>
+          `<col class="col-inv-${id}" data-col="${id}" style="width:${colWidth(id)}px" />`,
+      )
+      .join('')
+
     container.innerHTML = `
       <table class="data-table data-table--inventory">
         <colgroup>
-          <col class="col-inv-img" />
-          <col class="col-inv-name" />
-          <col class="col-inv-num" />
-          <col class="col-inv-dept" />
-          <col class="col-inv-size" />
-          <col class="col-inv-color" />
-          <col class="col-inv-loc" />
-          <col class="col-inv-oh" />
-          <col class="col-inv-act" />
+          ${colgroup}
+          <col class="col-inv-act" style="width:52px" />
         </colgroup>
-        <thead>${inventoryTableHeadHtml}</thead>
+        <thead>${inventoryTableHeadHtml(cols)}</thead>
         <tbody>
-          ${items.map((item) => inventoryItemRowHtml(item, onOrder)).join('')}
+          ${items.map((item) => inventoryItemRowHtml(item, onOrder, cols)).join('')}
         </tbody>
       </table>
     `
     wireResultActions(container)
+    wireTableChrome(container)
+  }
+
+  function refreshVisibleTables(): void {
+    if (!browseSection.hidden && catalogItems.length > 0) {
+      renderBrowseList()
+    }
+    if (searchItems.length > 0 && resultsEl.querySelector('table')) {
+      const sorted = sortItems(searchItems, sortKey, sortDir)
+      renderInventoryTable(resultsEl, sorted, 'search')
+    }
   }
 
   function openAddVariantModal(source: SourceItem): void {
@@ -426,10 +569,11 @@ export const renderInventory: ViewRender = (root) => {
     const prevBtn = section.querySelector('#blh-inv-page-prev') as HTMLButtonElement
     const nextBtn = section.querySelector('#blh-inv-page-next') as HTMLButtonElement
 
-    const totalPages = Math.max(1, Math.ceil(catalogItems.length / BROWSE_PAGE_SIZE))
+    const sorted = sortItems(catalogItems, sortKey, sortDir)
+    const totalPages = Math.max(1, Math.ceil(sorted.length / BROWSE_PAGE_SIZE))
     browsePage = Math.min(Math.max(1, browsePage), totalPages)
     const start = (browsePage - 1) * BROWSE_PAGE_SIZE
-    const pageItems = catalogItems.slice(start, start + BROWSE_PAGE_SIZE)
+    const pageItems = sorted.slice(start, start + BROWSE_PAGE_SIZE)
 
     if (catalogItems.length === 0) {
       tableWrap.innerHTML = '<p class="muted inv-browse-empty">Loading catalog…</p>'
@@ -456,6 +600,52 @@ export const renderInventory: ViewRender = (root) => {
       const tableWrap = section.querySelector('#blh-inv-browse-table') as HTMLElement
       tableWrap.innerHTML = `<p class="error inv-browse-empty">${esc(res.error ?? 'Could not load catalog')}</p>`
     }
+  }
+
+  function wireTableChrome(container: HTMLElement): void {
+    container.querySelectorAll('th[data-sort]').forEach((th) => {
+      th.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('[data-resize]')) return
+        const key = (th as HTMLElement).dataset.sort as SortKey | undefined
+        if (!key) return
+        if (sortKey === key) {
+          sortDir = sortDir === 'asc' ? 'desc' : 'asc'
+        } else {
+          sortKey = key
+          sortDir = 'asc'
+        }
+        if (tableMode === 'browse') {
+          renderBrowseList()
+        } else {
+          renderInventoryTable(resultsEl, sortItems(searchItems, sortKey, sortDir), 'search')
+        }
+      })
+    })
+
+    container.querySelectorAll('[data-resize]').forEach((handle) => {
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const id = (handle as HTMLElement).dataset.resize as InventoryColumnId | undefined
+        if (!id) return
+        const startX = (e as MouseEvent).clientX
+        const startW = colWidth(id)
+        const col = container.querySelector(`col[data-col="${id}"]`) as HTMLElement | null
+
+        const onMove = (ev: MouseEvent) => {
+          const next = Math.max(28, Math.min(220, startW + (ev.clientX - startX)))
+          uiState.columnWidths[id] = next
+          if (col) col.style.width = `${next}px`
+        }
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove)
+          document.removeEventListener('mouseup', onUp)
+          void saveInventoryUiState({ columnWidths: { [id]: colWidth(id) } })
+        }
+        document.addEventListener('mousemove', onMove)
+        document.addEventListener('mouseup', onUp)
+      })
+    })
   }
 
   function wireResultActions(container: HTMLElement): void {
@@ -500,6 +690,7 @@ export const renderInventory: ViewRender = (root) => {
     statusEl.className = 'status'
 
     if (isSearchQueryEmpty(query)) {
+      searchItems = []
       setBrowseVisible(true)
       clearSearchResults()
       await loadCatalogBrowse()
@@ -515,6 +706,7 @@ export const renderInventory: ViewRender = (root) => {
     })
 
     if (!res.ok || !res.search) {
+      searchItems = []
       resultsEl.innerHTML = `<p class="error">${esc(res.error ?? 'Search failed')}</p>`
       return
     }
@@ -524,12 +716,14 @@ export const renderInventory: ViewRender = (root) => {
     }
 
     if (res.search.items.length === 0) {
+      searchItems = []
       resultsEl.innerHTML =
-        '<p class="muted">No matches. Try another location, department, name, or item #.</p>'
+        '<p class="muted">No matches. Try another location, department, name, vendor item name, or item #.</p>'
       return
     }
 
-    renderInventoryTable(resultsEl, res.search.items, 'search')
+    searchItems = res.search.items
+    renderInventoryTable(resultsEl, sortItems(searchItems, sortKey, sortDir), 'search')
   })
 
   section.querySelector('#blh-inv-page-prev')?.addEventListener('click', () => {
@@ -546,6 +740,18 @@ export const renderInventory: ViewRender = (root) => {
     if (!browseSection.hidden && catalogItems.length > 0) renderBrowseList()
   }
 
+  const onStorageChanged = (
+    changes: { [key: string]: chrome.storage.StorageChange },
+    area: string,
+  ) => {
+    if (area !== 'local' || !changes.inventoryUiState) return
+    void loadInventoryUiState().then((state) => {
+      uiState = state
+      refreshVisibleTables()
+    })
+  }
+  chrome.storage.onChanged.addListener(onStorageChanged)
+
   applyContextPrefill()
   void loadLocationFilterOptions()
   wireFieldClearButtons(searchForm)
@@ -553,6 +759,7 @@ export const renderInventory: ViewRender = (root) => {
 
   return () => {
     document.removeEventListener('blh-context-updated', onContextForBrowse)
+    chrome.storage.onChanged.removeListener(onStorageChanged)
     section.querySelector('.blh-modal-host')?.remove()
   }
 }

@@ -374,7 +374,7 @@ body {
 .inv-browse-table-wrap,
 .view-inventory .results {
   margin-top: 10px;
-  overflow-x: hidden;
+  overflow-x: auto;
   max-width: 100%;
 }
 
@@ -382,6 +382,7 @@ body {
 .data-table--inventory {
   table-layout: fixed;
   width: 100%;
+  min-width: 100%;
 }
 
 .data-table--inventory th,
@@ -395,40 +396,39 @@ body {
 .data-table--inventory th {
   font-size: 11px;
   line-height: 1.25;
-  white-space: normal;
-  word-break: break-word;
+  white-space: nowrap;
+  position: relative;
+  user-select: none;
 }
 
-.data-table--inventory col.col-inv-img {
-  width: 44px;
+.data-table--inventory th.inv-th-sortable {
+  cursor: pointer;
 }
 
-.data-table--inventory col.col-inv-name {
-  width: 15%;
+.data-table--inventory th.inv-th-sortable:hover {
+  color: var(--blh-accent);
 }
 
-.data-table--inventory col.col-inv-num {
-  width: 12%;
+.data-table--inventory .inv-th-label {
+  display: inline-block;
+  max-width: calc(100% - 6px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
 }
 
-.data-table--inventory col.col-inv-dept {
-  width: 9%;
+.data-table--inventory .inv-col-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
 }
 
-.data-table--inventory col.col-inv-size {
-  width: 7%;
-}
-
-.data-table--inventory col.col-inv-color {
-  width: 13%;
-}
-
-.data-table--inventory col.col-inv-loc {
-  width: 14%;
-}
-
-.data-table--inventory col.col-inv-oh {
-  width: 7%;
+.data-table--inventory .inv-col-resize:hover {
+  background: color-mix(in srgb, var(--blh-accent) 35%, transparent);
 }
 
 .data-table--inventory col.col-inv-act {
@@ -459,6 +459,7 @@ body {
 
 .data-table--inventory .inv-loc-cell {
   overflow: hidden;
+  text-align: center;
 }
 
 .data-table--inventory .loc-tag {
@@ -470,28 +471,14 @@ body {
   vertical-align: middle;
   padding: 1px 4px;
   font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .data-table--inventory .inv-oh-cell {
   text-align: center;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-}
-
-.data-table--inventory .inv-image-col,
-.data-table--inventory .inv-image-cell {
-  width: 44px;
-  padding: 4px 2px;
-}
-
-.data-table--inventory .inv-item-thumb {
-  width: 36px;
-  height: 36px;
-}
-
-.data-table--inventory .inv-item-thumb--placeholder svg {
-  width: 18px;
-  height: 18px;
 }
 
 .data-table--inventory td.row-actions {
@@ -525,6 +512,29 @@ body {
 
 .data-table--inventory .btn-icon-action .btn-action-icon {
   margin: 0;
+}
+
+.inv-column-toggles {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 6px;
+}
+
+.inv-column-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.inv-column-toggle input {
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .inv-image-col {
@@ -938,6 +948,31 @@ body {
   font-size: var(--blh-font-size);
   font-weight: 600;
   padding: 0 4px;
+}
+
+.bl-api-locations {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.bl-api-location {
+  background: var(--blh-bg);
+}
+
+.bl-api-location .form-stack,
+.bl-api-location label {
+  margin-top: 8px;
+}
+
+.bl-api-status {
+  margin: 0 0 8px;
+}
+
+#blh-api-credentials .btn-sm {
+  align-self: flex-start;
+  margin-top: 4px;
 }
 
 .label-grid-wrap {

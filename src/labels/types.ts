@@ -9,7 +9,16 @@ export type LabelPayload = {
   department: Department
   size: string
   color: string
+  /** @deprecated Prefer msrp + salePrice — kept for older layouts. */
   price: string
+  /** Retail / MSRP, formatted for display (e.g. "$111.99"). */
+  msrp: string
+  /** Sale price, formatted for display (e.g. "$89.99"). */
+  salePrice: string
+  /** All available colors/variants for this style (top-left of stock label). */
+  variantColors: string[]
+  /** Value encoded in the barcode (item number). */
+  barcodeValue: string
   /** Resolved drawer id from `style-layouts.ts`. */
   styleLayoutId: string
 }

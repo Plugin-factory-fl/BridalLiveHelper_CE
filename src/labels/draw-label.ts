@@ -2,8 +2,11 @@ import type { PDFPage } from 'pdf-lib'
 import { rgb } from 'pdf-lib'
 import type { LabelPayload } from './types'
 import { getLabelStyleLayout } from './style-layouts'
+import { drawCode128Barcode } from './barcode'
 
 const IN_TO_PT = 72
+const BLACK = rgb(0.08, 0.08, 0.1)
+const MUTED = rgb(0.35, 0.32, 0.38)
 
 export type LabelDrawFonts = {
   regular: Awaited<ReturnType<import('pdf-lib').PDFDocument['embedFont']>>
@@ -15,17 +18,6 @@ export type LabelDrawBox = {
   yIn: number
   widthIn: number
   heightIn: number
-}
-
-function departmentAccent(department: string): ReturnType<typeof rgb> {
-  switch (department) {
-    case 'Shoes':
-      return rgb(0.2, 0.35, 0.55)
-    case 'Jewelry':
-      return rgb(0.45, 0.35, 0.15)
-    default:
-      return rgb(0.48, 0.31, 0.54)
-  }
 }
 
 function boxToPt(box: LabelDrawBox) {
@@ -44,213 +36,168 @@ function drawBorder(page: PDFPage, box: LabelDrawBox): void {
     y,
     width: w,
     height: h,
-    borderColor: rgb(0.75, 0.72, 0.78),
-    borderWidth: 0.5,
+    borderColor: rgb(0.7, 0.68, 0.72),
+    borderWidth: 0.4,
   })
 }
 
-/** Dress — Classic tag (placeholder for Ricky's dress design). */
-function drawDressClassic(
+function wrapWords(
+  text: string,
+  font: LabelDrawFonts['regular'],
+  size: number,
+  maxWidth: number,
+  maxLines: number,
+): string[] {
+  const words = text.split(/\s+/).filter(Boolean)
+  if (!words.length) return []
+  const lines: string[] = []
+  let current = ''
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word
+    if (font.widthOfTextAtSize(next, size) <= maxWidth) {
+      current = next
+      continue
+    }
+    if (current) lines.push(current)
+    current = word
+    if (lines.length >= maxLines) break
+  }
+  if (current && lines.length < maxLines) lines.push(current)
+  if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) {
+    const last = lines[maxLines - 1]!
+    lines[maxLines - 1] = `${last.replace(/\s+\S*$/, '')}…`.trim()
+  }
+  return lines
+}
+
+/**
+ * Ricky’s stock label (Avery 5160):
+ * TL variants · ML MSRP (struck) · BL sale price
+ * TR size/color · MR barcode · BR item #
+ */
+function drawStockLabel(
   page: PDFPage,
   payload: LabelPayload,
   box: LabelDrawBox,
   fonts: LabelDrawFonts,
 ): void {
   const { x, y, w, h } = boxToPt(box)
-  const pad = 4
+  const pad = 3.5
+  const midX = x + w * 0.52
+  const rightW = w - (midX - x) - pad
   drawBorder(page, box)
 
+  // --- Top left: all colors / variants ---
+  const variantText =
+    payload.variantColors.length > 0 ? payload.variantColors.join(' ') : payload.color
+  const variantSize = 5.5
+  const variantLines = wrapWords(variantText, fonts.regular, variantSize, midX - x - pad * 2, 3)
+  let variantY = y + h - pad - variantSize
+  for (const line of variantLines) {
+    page.drawText(line, {
+      x: x + pad,
+      y: variantY,
+      size: variantSize,
+      font: fonts.regular,
+      color: BLACK,
+    })
+    variantY -= variantSize + 1.5
+  }
+
+  // --- Middle left: MSRP with strikethrough ---
+  const msrp = payload.msrp || payload.price
+  const msrpSize = 7
+  const msrpY = y + h * 0.42
+  page.drawText(msrp, {
+    x: x + pad,
+    y: msrpY,
+    size: msrpSize,
+    font: fonts.regular,
+    color: MUTED,
+  })
+  const msrpW = fonts.regular.widthOfTextAtSize(msrp, msrpSize)
+  page.drawLine({
+    start: { x: x + pad - 0.5, y: msrpY + msrpSize * 0.35 },
+    end: { x: x + pad + msrpW + 0.5, y: msrpY + msrpSize * 0.35 },
+    thickness: 0.7,
+    color: MUTED,
+  })
+
+  // --- Bottom left: sale price (larger, no strike) ---
+  const sale = payload.salePrice || payload.price
+  const saleSize = 10
+  page.drawText(sale, {
+    x: x + pad,
+    y: y + pad + 2,
+    size: saleSize,
+    font: fonts.bold,
+    color: BLACK,
+  })
+
+  // --- Top right: chosen size + color (boxed) ---
+  const boxPad = 2
+  const sizeColorBoxW = Math.min(rightW, 58)
+  const sizeColorBoxH = 22
+  const sizeColorBoxX = x + w - pad - sizeColorBoxW
+  const sizeColorBoxY = y + h - pad - sizeColorBoxH
   page.drawRectangle({
-    x: x + 1,
-    y: y + h - 10,
-    width: w - 2,
-    height: 9,
-    color: departmentAccent(payload.department),
+    x: sizeColorBoxX,
+    y: sizeColorBoxY,
+    width: sizeColorBoxW,
+    height: sizeColorBoxH,
+    borderColor: BLACK,
+    borderWidth: 0.6,
   })
-
-  page.drawText(payload.department.toUpperCase(), {
-    x: x + pad,
-    y: y + h - 8,
-    size: 5,
-    font: fonts.bold,
-    color: rgb(1, 1, 1),
-  })
-
-  page.drawText(payload.style, {
-    x: x + pad,
-    y: y + h - 22,
-    size: 9,
-    font: fonts.bold,
-    color: rgb(0.15, 0.12, 0.18),
-    maxWidth: w - pad * 2,
-  })
-
-  page.drawText(`${payload.size} / ${payload.color}`, {
-    x: x + pad,
-    y: y + h - 34,
-    size: 7,
-    font: fonts.regular,
-    color: rgb(0.35, 0.3, 0.38),
-  })
-
-  page.drawText(payload.itemNumber, {
-    x: x + pad,
-    y: y + 14,
-    size: 8,
-    font: fonts.bold,
-    color: rgb(0.1, 0.1, 0.12),
-  })
-
-  page.drawText(payload.price, {
-    x: x + w - pad - 36,
-    y: y + 14,
-    size: 8,
-    font: fonts.bold,
-    color: rgb(0.2, 0.45, 0.28),
-  })
-
-  page.drawText(payload.vendor, {
-    x: x + pad,
-    y: y + 4,
-    size: 5,
-    font: fonts.regular,
-    color: rgb(0.5, 0.45, 0.52),
-    maxWidth: w - pad * 2,
-  })
-}
-
-/** Dress — Minimal (placeholder). */
-function drawDressMinimal(
-  page: PDFPage,
-  payload: LabelPayload,
-  box: LabelDrawBox,
-  fonts: LabelDrawFonts,
-): void {
-  const { x, y, w, h } = boxToPt(box)
-  const pad = 5
-  drawBorder(page, box)
-
-  page.drawText(payload.style, {
-    x: x + pad,
-    y: y + h - 18,
-    size: 10,
-    font: fonts.bold,
-    color: rgb(0.12, 0.1, 0.14),
-    maxWidth: w - pad * 2,
-  })
-
-  page.drawText(`${payload.size} · ${payload.color}`, {
-    x: x + pad,
-    y: y + h - 30,
-    size: 7,
-    font: fonts.regular,
-    color: rgb(0.4, 0.35, 0.42),
-  })
-
-  page.drawText(payload.itemNumber, {
-    x: x + pad,
-    y: y + 12,
-    size: 9,
-    font: fonts.bold,
-    color: rgb(0.1, 0.1, 0.12),
-  })
-
-  page.drawText(payload.price, {
-    x: x + w - pad - 40,
-    y: y + 12,
-    size: 9,
-    font: fonts.bold,
-    color: rgb(0.2, 0.45, 0.28),
-  })
-}
-
-/** Shoes — Standard (placeholder). */
-function drawShoesStandard(
-  page: PDFPage,
-  payload: LabelPayload,
-  box: LabelDrawBox,
-  fonts: LabelDrawFonts,
-): void {
-  const { x, y, w, h } = boxToPt(box)
-  const pad = 4
-  drawBorder(page, box)
-
-  page.drawText(payload.itemNumber, {
-    x: x + pad,
-    y: y + h - 16,
-    size: 10,
-    font: fonts.bold,
-    color: rgb(0.15, 0.2, 0.35),
-  })
-
-  page.drawText(payload.style, {
-    x: x + pad,
-    y: y + h - 28,
-    size: 7,
-    font: fonts.regular,
-    color: rgb(0.3, 0.28, 0.32),
-    maxWidth: w - pad * 2,
-  })
-
-  page.drawText(`Size ${payload.size}`, {
-    x: x + pad,
-    y: y + 14,
-    size: 8,
-    font: fonts.bold,
-    color: rgb(0.1, 0.1, 0.12),
-  })
-
-  page.drawText(payload.price, {
-    x: x + w - pad - 36,
-    y: y + 14,
-    size: 8,
-    font: fonts.bold,
-    color: rgb(0.2, 0.45, 0.28),
-  })
-}
-
-/** Jewelry — Standard (placeholder). */
-function drawJewelryStandard(
-  page: PDFPage,
-  payload: LabelPayload,
-  box: LabelDrawBox,
-  fonts: LabelDrawFonts,
-): void {
-  const { x, y, w, h } = boxToPt(box)
-  const pad = 4
-  drawBorder(page, box)
-
-  page.drawText(payload.price, {
-    x: x + pad,
-    y: y + h - 18,
-    size: 11,
-    font: fonts.bold,
-    color: rgb(0.35, 0.28, 0.12),
-  })
-
-  page.drawText(payload.style, {
-    x: x + pad,
-    y: y + h - 30,
-    size: 7,
-    font: fonts.regular,
-    color: rgb(0.35, 0.3, 0.38),
-    maxWidth: w - pad * 2,
-  })
-
-  page.drawText(payload.itemNumber, {
-    x: x + pad,
-    y: y + 12,
+  const sizeText = payload.size || '—'
+  const colorText = payload.color || '—'
+  page.drawText(sizeText, {
+    x: sizeColorBoxX + boxPad,
+    y: sizeColorBoxY + sizeColorBoxH - 9,
     size: 7,
     font: fonts.bold,
-    color: rgb(0.1, 0.1, 0.12),
+    color: BLACK,
+    maxWidth: sizeColorBoxW - boxPad * 2,
+  })
+  page.drawText(colorText, {
+    x: sizeColorBoxX + boxPad,
+    y: sizeColorBoxY + 3.5,
+    size: 5.5,
+    font: fonts.regular,
+    color: BLACK,
+    maxWidth: sizeColorBoxW - boxPad * 2,
   })
 
-  page.drawText(payload.color, {
-    x: x + w - pad - 48,
-    y: y + 12,
-    size: 7,
+  // --- Middle right: barcode ---
+  const barcodeH = 18
+  const barcodeY = y + h * 0.28
+  const barcodeX = midX
+  const barcodeW = x + w - pad - barcodeX
+  drawCode128Barcode(payload.barcodeValue || payload.itemNumber, {
+    x: barcodeX,
+    y: barcodeY,
+    width: barcodeW,
+    height: barcodeH,
+    fillRect: (rx, ry, rw, rh) => {
+      page.drawRectangle({
+        x: rx,
+        y: ry,
+        width: Math.max(0.35, rw),
+        height: rh,
+        color: BLACK,
+      })
+    },
+  })
+
+  // --- Bottom right: item number ---
+  const itemLabel = `Item # ${payload.itemNumber}`
+  const itemSize = 6
+  const itemW = fonts.regular.widthOfTextAtSize(itemLabel, itemSize)
+  page.drawText(itemLabel, {
+    x: Math.max(midX, x + w - pad - itemW),
+    y: y + pad + 2,
+    size: itemSize,
     font: fonts.regular,
-    color: rgb(0.45, 0.4, 0.48),
+    color: BLACK,
   })
 }
 
@@ -258,15 +205,15 @@ const DRAWERS: Record<
   string,
   (page: PDFPage, payload: LabelPayload, box: LabelDrawBox, fonts: LabelDrawFonts) => void
 > = {
-  'dress-classic': drawDressClassic,
-  'dress-minimal': drawDressMinimal,
-  'shoes-standard': drawShoesStandard,
-  'jewelry-standard': drawJewelryStandard,
+  'dress-classic': drawStockLabel,
+  'dress-minimal': drawStockLabel,
+  'shoes-standard': drawStockLabel,
+  'jewelry-standard': drawStockLabel,
 }
 
 /**
  * Draw one label using the layout id on the payload.
- * Unknown ids fall back to dress-classic.
+ * Unknown ids fall back to dress-classic (Ricky stock label).
  */
 export function drawLabel(
   page: PDFPage,

@@ -22,6 +22,7 @@ function normalizeQuery(query: InventorySearchQuery) {
     locationId: query.locationId?.trim() ?? '',
     department: query.department?.trim().toLowerCase() ?? '',
     name,
+    vendorItemName: query.vendorItemName?.trim().toLowerCase() ?? '',
     vendor: query.vendor?.trim().toLowerCase() ?? '',
     size: query.size?.trim() ?? '',
     color: query.color?.trim().toLowerCase() ?? '',
@@ -34,6 +35,9 @@ function matchesItem(item: InventoryItem, q: ReturnType<typeof normalizeQuery>):
   if (q.department && item.department.toLowerCase() !== q.department) return false
   if (q.itemNumber && !item.itemNumber.toLowerCase().includes(q.itemNumber)) return false
   if (q.name && !item.style.toLowerCase().includes(q.name)) return false
+  if (q.vendorItemName && !item.vendorItemName.toLowerCase().includes(q.vendorItemName)) {
+    return false
+  }
   if (q.vendor && !item.vendor.toLowerCase().includes(q.vendor)) return false
   if (q.size && item.size !== q.size) return false
   if (q.color && !item.color.toLowerCase().includes(q.color)) return false
@@ -108,6 +112,7 @@ async function createVariant(
     id: `mock-${Date.now()}`,
     itemNumber,
     style: payload.styleId,
+    vendorItemName: source?.vendorItemName ?? payload.styleId,
     vendor,
     saleSearchQuery: buildSaleSearchQuery(vendor, itemNumber),
     department: source?.department ?? 'Dress',
@@ -116,6 +121,9 @@ async function createVariant(
     locationId: source?.locationId ?? 'store-1',
     locationName: source?.locationName ?? 'Main Boutique',
     onHand: 0,
+    retailPrice: source?.retailPrice,
+    salePrice: source?.salePrice,
+    availableColors: source?.availableColors,
   }
   MOCK_ITEMS.push(newItem)
 

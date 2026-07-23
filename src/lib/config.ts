@@ -62,12 +62,15 @@ export const STORAGE_KEYS = {
   mockStoreId: 'mockStoreId',
   devScreenOverride: 'devScreenOverride',
   labelsUiState: 'labelsUiState',
+  inventoryUiState: 'inventoryUiState',
   lastBridalLiveContext: 'lastBridalLiveContext',
   helperBridalLiveTabId: 'helperBridalLiveTabId',
   /** Active while a label PDF tab is open — side panel must stay up in that window. */
   helperPrintPreview: 'helperPrintPreview',
   /** Uint8 array stored while the print-preview tab is open. */
   helperPrintPdfBytes: 'helperPrintPdfBytes',
+  /** Phase 2: per-location Retailer ID + API key (chrome.storage.local). */
+  bridalLiveApiSettings: 'bridalLiveApiSettings',
 } as const
 
 export type PrintPreviewSession = {

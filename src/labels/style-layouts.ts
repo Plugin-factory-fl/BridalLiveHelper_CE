@@ -17,6 +17,15 @@ export type LabelStyleLayout = {
   status: LabelStyleLayoutStatus
 }
 
+const STOCK_FIELDS = [
+  'All colors / variants',
+  'MSRP (strikethrough)',
+  'Sale price',
+  'Size + color',
+  'Barcode',
+  'Item #',
+]
+
 /**
  * Ricky's label designs register here.
  * To add a client design: add an entry + implement its drawer in `draw-label.ts`.
@@ -25,34 +34,35 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
   {
     id: 'dress-classic',
     department: 'Dress',
-    name: 'Dress — Classic tag',
-    description: 'Header band, style, size/color, item #, price, vendor.',
-    fields: ['Department', 'Style', 'Size / Color', 'Item #', 'Price', 'Vendor'],
-    status: 'placeholder',
+    name: 'Stock label',
+    description:
+      'Variants top-left, MSRP struck + sale price bottom-left; size/color, barcode, and item # on the right.',
+    fields: STOCK_FIELDS,
+    status: 'client',
   },
   {
     id: 'dress-minimal',
     department: 'Dress',
-    name: 'Dress — Minimal',
-    description: 'No header band — larger style line for floor tags.',
-    fields: ['Style', 'Size / Color', 'Item #', 'Price'],
-    status: 'placeholder',
+    name: 'Stock label (Dress alt)',
+    description: 'Same stock layout as Dress — Classic.',
+    fields: STOCK_FIELDS,
+    status: 'client',
   },
   {
     id: 'shoes-standard',
     department: 'Shoes',
-    name: 'Shoes — Standard',
-    description: 'Compact layout with prominent item # and size.',
-    fields: ['Item #', 'Style', 'Size', 'Price'],
-    status: 'placeholder',
+    name: 'Stock label',
+    description: 'Same six-region stock layout used for dresses.',
+    fields: STOCK_FIELDS,
+    status: 'client',
   },
   {
     id: 'jewelry-standard',
     department: 'Jewelry',
-    name: 'Jewelry — Standard',
-    description: 'Price-forward layout for small tags.',
-    fields: ['Price', 'Style', 'Item #', 'Color'],
-    status: 'placeholder',
+    name: 'Stock label',
+    description: 'Same six-region stock layout used for dresses.',
+    fields: STOCK_FIELDS,
+    status: 'client',
   },
 ]
 
