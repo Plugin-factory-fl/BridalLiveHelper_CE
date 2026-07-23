@@ -25,7 +25,7 @@ function lineDepartment(
   match: InventoryItem | undefined,
   fallback?: Department,
 ): Department {
-  const base = fallback ?? guessDepartment(line.itemNumber)
+  const base = fallback ?? guessDepartment(line.itemNumber || match?.itemNumber || '')
   return asDepartment(line.department ?? match?.department, base)
 }
 
@@ -35,6 +35,36 @@ function formatMoney(amount: number | undefined): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`
+}
+
+function findCatalogMatch(
+  line: LabelLineItem,
+  catalog: InventoryItem[],
+): InventoryItem | undefined {
+  const itemNumber = line.itemNumber?.trim().toLowerCase()
+  if (itemNumber) {
+    const byNumber = catalog.find((i) => i.itemNumber.toLowerCase() === itemNumber)
+    if (byNumber) return byNumber
+  }
+
+  const vendorName = line.vendorItemName?.trim().toLowerCase()
+  if (vendorName) {
+    const vendorMatches = catalog.filter(
+      (i) => i.vendorItemName.trim().toLowerCase() === vendorName,
+    )
+    if (vendorMatches.length === 1) return vendorMatches[0]
+
+    if (line.size || line.color) {
+      const sized = vendorMatches.find(
+        (i) =>
+          (!line.size || i.size.trim().toLowerCase() === line.size.trim().toLowerCase()) &&
+          (!line.color || i.color.trim().toLowerCase() === line.color.trim().toLowerCase()),
+      )
+      if (sized) return sized
+    }
+  }
+
+  return undefined
 }
 
 /** Unique colors for a style: prefer Description list, else sibling catalog rows. */
@@ -69,18 +99,16 @@ export function enrichFromCatalog(
     fallbackDepartment?: Department
   },
 ): LabelPayload {
-  const match = catalog.find(
-    (i) => i.itemNumber.toLowerCase() === line.itemNumber.trim().toLowerCase(),
-  )
+  const match = findCatalogMatch(line, catalog)
 
   const department = lineDepartment(line, match, options.fallbackDepartment)
   const styleLayoutId = resolveStyleLayoutId(options.styleLayoutSelection, department)
   const itemNumber = match?.itemNumber ?? line.itemNumber.trim()
   const color = line.color ?? match?.color ?? '—'
-  const msrp = formatMoney(match?.retailPrice)
-  const salePrice = formatMoney(
-    match?.salePrice != null && match.salePrice > 0 ? match.salePrice : match?.retailPrice,
-  )
+  const retail = line.retailPrice ?? match?.retailPrice
+  const sale = line.salePrice ?? match?.salePrice
+  const msrp = formatMoney(retail)
+  const salePrice = formatMoney(sale != null && sale > 0 ? sale : retail)
 
   return {
     itemNumber,

@@ -1,10 +1,12 @@
 import { listStores } from '../../api/client'
 import { MSG } from '../../lib/messages'
 import {
+  INVENTORY_BROWSE_PAGE_SIZES,
   INVENTORY_COLUMN_IDS,
   INVENTORY_COLUMN_LABELS,
   loadInventoryUiState,
   saveInventoryUiState,
+  type InventoryBrowsePageSize,
   type InventoryColumnId,
   type InventoryUiState,
 } from '../../lib/inventory-ui-state'
@@ -43,11 +45,22 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/** Two-letter location shorthand (Main Boutique → MB). Full name stays in title. */
+/** Location shorthand for inventory table (Poughkeepsie → PK, not PO). */
 function locationShorthand(name: string): string {
+  const key = name.trim().toLowerCase()
+  const known: Record<string, string> = {
+    poughkeepsie: 'PK',
+    'white plains': 'WP',
+    'white-plains': 'WP',
+    'main boutique': 'MB',
+    'second location': 'SL',
+  }
+  if (known[key]) return known[key]
+
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase()
+    // Prefer first + last significant word for multi-word names when not in map.
+    return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
   }
   const cleaned = name.replace(/[^a-zA-Z0-9]/g, '')
   return (cleaned.slice(0, 2) || '?').toUpperCase()
@@ -74,7 +87,7 @@ type SourceItem = Pick<
   'itemNumber' | 'style' | 'vendor' | 'department' | 'size' | 'color'
 >
 
-const BROWSE_PAGE_SIZE = 10
+const BROWSE_PAGE_SIZE_DEFAULT: InventoryBrowsePageSize = 10
 
 type SortKey = InventoryColumnId
 type SortDir = 'asc' | 'desc'
@@ -227,17 +240,29 @@ export const renderInventory: ViewRender = (root) => {
     </form>
 
     <section class="inv-browse" id="blh-inv-browse" hidden aria-labelledby="blh-inv-browse-heading">
-      <h3 class="subheading" id="blh-inv-browse-heading">Browse catalog</h3>
-      <p class="muted small">Leave search fields empty and press Search · Click a column header to sort · 10 per page</p>
+      <div class="inv-browse-header">
+        <div>
+          <h3 class="subheading" id="blh-inv-browse-heading">Browse catalog</h3>
+          <p class="muted small" id="blh-inv-browse-hint">Leave search fields empty and press Search · Click a column header to sort</p>
+        </div>
+        <label class="inv-page-size">
+          Show
+          <select id="blh-inv-page-size" aria-label="Items per page">
+            ${INVENTORY_BROWSE_PAGE_SIZES.map(
+              (n) => `<option value="${n}">${n}</option>`,
+            ).join('')}
+          </select>
+          per page
+        </label>
+      </div>
       <div id="blh-inv-browse-table" class="inv-browse-table-wrap"></div>
       <div class="inv-browse-pager btn-row">
         <button type="button" class="btn btn-ghost btn-sm" id="blh-inv-page-prev" disabled>Previous</button>
-        <span id="blh-inv-page-label" class="inv-browse-page-label">Page 1 of 10</span>
+        <span id="blh-inv-page-label" class="inv-browse-page-label">Page 1</span>
         <button type="button" class="btn btn-ghost btn-sm" id="blh-inv-page-next">Next</button>
       </div>
     </section>
 
-    <div id="blh-inv-results" class="results"></div>
     <p id="blh-inv-status" class="status" role="status"></p>
   `
 
@@ -245,22 +270,23 @@ export const renderInventory: ViewRender = (root) => {
 
   const searchForm = section.querySelector('#blh-inv-search') as HTMLFormElement
   const browseSection = section.querySelector('#blh-inv-browse') as HTMLElement
-  const resultsEl = section.querySelector('#blh-inv-results') as HTMLElement
+  const listHeading = section.querySelector('#blh-inv-browse-heading') as HTMLElement
+  const listHint = section.querySelector('#blh-inv-browse-hint') as HTMLElement
+  const tableWrap = section.querySelector('#blh-inv-browse-table') as HTMLElement
+  const pageLabel = section.querySelector('#blh-inv-page-label') as HTMLElement
+  const prevBtn = section.querySelector('#blh-inv-page-prev') as HTMLButtonElement
+  const nextBtn = section.querySelector('#blh-inv-page-next') as HTMLButtonElement
   const orderBanner = section.querySelector('#blh-inv-order-banner') as HTMLElement
   const statusEl = section.querySelector('#blh-inv-status') as HTMLElement
 
-  const setBrowseVisible = (visible: boolean) => {
+  const setListVisible = (visible: boolean) => {
     browseSection.hidden = !visible
   }
 
-  const clearSearchResults = () => {
-    resultsEl.innerHTML = ''
-  }
-
   let currentStoreId = 'store-1'
-  let catalogItems: InventoryItem[] = []
-  let searchItems: InventoryItem[] = []
-  let browsePage = 1
+  /** Active browse/search result set (always shown with pagination). */
+  let listItems: InventoryItem[] = []
+  let listPage = 1
   let sortKey: SortKey = 'itemNumber'
   let sortDir: SortDir = 'asc'
   let uiState: InventoryUiState = {
@@ -275,8 +301,10 @@ export const renderInventory: ViewRender = (root) => {
       qty: true,
     },
     columnWidths: {},
+    browsePageSize: BROWSE_PAGE_SIZE_DEFAULT,
   }
   let tableMode: 'browse' | 'search' = 'browse'
+  const pageSizeSelect = section.querySelector('#blh-inv-page-size') as HTMLSelectElement
 
   void resolveStoreId().then((id) => {
     currentStoreId = id
@@ -284,8 +312,48 @@ export const renderInventory: ViewRender = (root) => {
 
   void loadInventoryUiState().then((state) => {
     uiState = state
+    pageSizeSelect.value = String(state.browsePageSize)
     refreshVisibleTables()
   })
+
+  function pageSize(): InventoryBrowsePageSize {
+    return uiState.browsePageSize
+  }
+
+  function loadingHtml(message: string): string {
+    return `
+      <div class="inv-loading" role="status" aria-live="polite">
+        <span class="inv-spinner" aria-hidden="true"></span>
+        <span class="inv-loading-text">${esc(message)}</span>
+      </div>
+    `
+  }
+
+  function showLoading(message: string): void {
+    tableWrap.innerHTML = loadingHtml(message)
+    pageLabel.textContent = 'Loading…'
+    prevBtn.disabled = true
+    nextBtn.disabled = true
+  }
+
+  function scrollToInventoryList(): void {
+    requestAnimationFrame(() => {
+      browseSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
+  function setListChrome(mode: 'browse' | 'search'): void {
+    tableMode = mode
+    if (mode === 'browse') {
+      listHeading.textContent = 'Browse catalog'
+      listHint.textContent =
+        'Leave search fields empty and press Search · Click a column header to sort'
+    } else {
+      listHeading.textContent = 'Search results'
+      listHint.textContent =
+        'Filtered inventory · Click a column header to sort · Use pages below to browse matches'
+    }
+  }
 
   async function loadLocationFilterOptions(): Promise<void> {
     const select = section.querySelector('#blh-inv-location') as HTMLSelectElement | null
@@ -340,6 +408,77 @@ export const renderInventory: ViewRender = (root) => {
       primaryLabel: 'Got it',
       onPrimary: onDismiss,
     })
+  }
+
+  function showVariantCreatedModal(message: string): void {
+    showModal(section, {
+      title: 'Variant created',
+      body: message,
+      variant: 'info',
+      primaryLabel: 'Got it',
+    })
+  }
+
+  function setInventoryStatus(
+    message: string,
+    kind: 'success' | 'error' | '' = '',
+  ): void {
+    statusEl.textContent = message
+    statusEl.className = kind ? `status ${kind}` : 'status'
+  }
+
+  async function runInventoryQuery(options?: {
+    keepStatus?: { message: string; kind: 'success' | 'error' }
+  }): Promise<void> {
+    currentStoreId = await resolveStoreId()
+    const query = readSearchQuery(searchForm)
+
+    if (!options?.keepStatus) {
+      setInventoryStatus('')
+    }
+
+    if (isSearchQueryEmpty(query)) {
+      await loadCatalogBrowse()
+      if (options?.keepStatus) {
+        setInventoryStatus(options.keepStatus.message, options.keepStatus.kind)
+      }
+      return
+    }
+
+    setListChrome('search')
+    setListVisible(true)
+    listItems = []
+    showLoading('Searching inventory…')
+    scrollToInventoryList()
+
+    try {
+      const search = await searchInventory(query, currentStoreId)
+
+      if (search.duplicateWarning && !options?.keepStatus) {
+        showDuplicateModal(search.duplicateWarning)
+      }
+
+      showPagedItems(search.items, 'search')
+    } catch (err) {
+      listItems = []
+      tableWrap.innerHTML = `<p class="error inv-browse-empty">${esc(
+        err instanceof Error ? err.message : 'Search failed',
+      )}</p>`
+      pageLabel.textContent = 'Page 1 of 1'
+      prevBtn.disabled = true
+      nextBtn.disabled = true
+      scrollToInventoryList()
+      if (!options?.keepStatus) {
+        setInventoryStatus(
+          err instanceof Error ? err.message : 'Search failed',
+          'error',
+        )
+      }
+    }
+
+    if (options?.keepStatus) {
+      setInventoryStatus(options.keepStatus.message, options.keepStatus.kind)
+    }
   }
 
   function visibleColumns(): InventoryColumnId[] {
@@ -407,7 +546,7 @@ export const renderInventory: ViewRender = (root) => {
   function inventoryRowActionsHtml(item: InventoryItem, onOrder: boolean): string {
     const variant = `<button type="button" class="btn btn-add-variant btn-sm btn-icon-action" data-add-variant title="Add another size or color for this style" aria-label="Add variant">+</button>`
     const order = onOrder
-      ? `<button type="button" class="btn btn-add-to-order btn-sm btn-icon-action" data-apply="${esc(item.saleSearchQuery)}" title="Add to order" aria-label="Add to order">⊕</button>`
+      ? `<button type="button" class="btn btn-add-to-order btn-sm btn-icon-action" data-apply="${esc(item.itemNumber)}" data-item-id="${esc(item.id)}" data-item-number="${esc(item.itemNumber)}" title="Add to order" aria-label="Add to order">⊕</button>`
       : ''
     return `<span class="row-actions-compact">${variant}${order}</span>`
   }
@@ -433,12 +572,7 @@ export const renderInventory: ViewRender = (root) => {
       </tr>`
   }
 
-  function renderInventoryTable(
-    container: HTMLElement,
-    items: InventoryItem[],
-    mode: 'browse' | 'search',
-  ): void {
-    tableMode = mode
+  function renderInventoryTable(items: InventoryItem[]): void {
     const cols = visibleColumns()
     const onOrder = getPanelContext()?.screen === 'order'
     const colgroup = cols
@@ -448,7 +582,7 @@ export const renderInventory: ViewRender = (root) => {
       )
       .join('')
 
-    container.innerHTML = `
+    tableWrap.innerHTML = `
       <table class="data-table data-table--inventory">
         <colgroup>
           ${colgroup}
@@ -460,18 +594,54 @@ export const renderInventory: ViewRender = (root) => {
         </tbody>
       </table>
     `
-    wireResultActions(container)
-    wireTableChrome(container)
+    wireResultActions(tableWrap)
+    wireTableChrome(tableWrap)
   }
 
   function refreshVisibleTables(): void {
-    if (!browseSection.hidden && catalogItems.length > 0) {
-      renderBrowseList()
+    if (!browseSection.hidden && listItems.length > 0) {
+      renderPagedList()
     }
-    if (searchItems.length > 0 && resultsEl.querySelector('table')) {
-      const sorted = sortItems(searchItems, sortKey, sortDir)
-      renderInventoryTable(resultsEl, sorted, 'search')
+  }
+
+  function renderPagedList(): void {
+    const size = pageSize()
+    const sorted = sortItems(listItems, sortKey, sortDir)
+    const totalPages = Math.max(1, Math.ceil(sorted.length / size))
+    listPage = Math.min(Math.max(1, listPage), totalPages)
+    const start = (listPage - 1) * size
+    const pageItems = sorted.slice(start, start + size)
+
+    if (listItems.length === 0) {
+      tableWrap.innerHTML =
+        tableMode === 'search'
+          ? '<p class="muted inv-browse-empty">No matches. Try another location, department, name, vendor item name, or item #.</p>'
+          : '<p class="muted inv-browse-empty">No inventory to browse yet.</p>'
+      pageLabel.textContent = 'Page 1 of 1'
+      prevBtn.disabled = true
+      nextBtn.disabled = true
+      return
     }
+
+    renderInventoryTable(pageItems)
+
+    const totalLabel =
+      listItems.length === 1 ? '1 item' : `${listItems.length} items`
+    pageLabel.textContent = `Page ${listPage} of ${totalPages} · ${totalLabel}`
+    prevBtn.disabled = listPage <= 1
+    nextBtn.disabled = listPage >= totalPages
+  }
+
+  function showPagedItems(
+    items: InventoryItem[],
+    mode: 'browse' | 'search',
+  ): void {
+    listItems = items
+    listPage = 1
+    setListChrome(mode)
+    setListVisible(true)
+    renderPagedList()
+    scrollToInventoryList()
   }
 
   function openAddVariantModal(source: SourceItem): void {
@@ -514,8 +684,22 @@ export const renderInventory: ViewRender = (root) => {
       const fd = new FormData(form)
       const size = String(fd.get('size') ?? '').trim()
       const color = String(fd.get('color') ?? '').trim()
+      const submitBtn = form.querySelector(
+        'button[type="submit"]',
+      ) as HTMLButtonElement | null
+
+      if (
+        size.toLowerCase() === source.size.trim().toLowerCase() &&
+        color.toLowerCase() === source.color.trim().toLowerCase()
+      ) {
+        showDuplicateModal(
+          `This style + size + color already exists as item ${source.itemNumber} (${source.size} / ${source.color}). Enter a different size or color.`,
+        )
+        return
+      }
 
       try {
+        if (submitBtn) submitBtn.disabled = true
         const storeId = await resolveStoreId()
         const duplicateWarning = await checkDuplicateVariant(
           source.style,
@@ -544,25 +728,24 @@ export const renderInventory: ViewRender = (root) => {
         }
 
         close()
-        statusEl.textContent = variant.message
-        statusEl.className = 'status success'
+        const itemLabel = variant.itemNumber ? `item #${variant.itemNumber}` : 'a new item'
+        const successMsg =
+          `Variant created in BridalLive as ${itemLabel}` +
+          ` (${size} / ${color}) for ${source.style}.` +
+          ` Use ⊕ Add to order if you want it on the open sale.`
 
-        if (variant.saleSearchQuery && getPanelContext()?.screen === 'order') {
-          const apply = await sendToContent({
-            type: MSG.APPLY_ITEM_TO_ORDER,
-            saleSearchQuery: variant.saleSearchQuery,
-          })
-          if (apply.ok) {
-            statusEl.textContent += apply.autoSelected
-              ? ` Added ${variant.saleSearchQuery} to the order.`
-              : ` Sale search: ${variant.saleSearchQuery} — pick from dropdown if needed.`
-          }
-        }
-
-        searchForm.requestSubmit()
+        showVariantCreatedModal(successMsg)
+        setInventoryStatus(successMsg, 'success')
+        await runInventoryQuery({
+          keepStatus: { message: successMsg, kind: 'success' },
+        })
       } catch (err) {
-        statusEl.textContent = err instanceof Error ? err.message : 'Failed to create variant'
-        statusEl.className = 'status error'
+        setInventoryStatus(
+          err instanceof Error ? err.message : 'Failed to create variant',
+          'error',
+        )
+      } finally {
+        if (submitBtn) submitBtn.disabled = false
       }
     })
   }
@@ -578,51 +761,34 @@ export const renderInventory: ViewRender = (root) => {
     }
   }
 
-  function renderBrowseList(): void {
-    const tableWrap = section.querySelector('#blh-inv-browse-table') as HTMLElement
-    const pageLabel = section.querySelector('#blh-inv-page-label') as HTMLElement
-    const prevBtn = section.querySelector('#blh-inv-page-prev') as HTMLButtonElement
-    const nextBtn = section.querySelector('#blh-inv-page-next') as HTMLButtonElement
-
-    const sorted = sortItems(catalogItems, sortKey, sortDir)
-    const totalPages = Math.max(1, Math.ceil(sorted.length / BROWSE_PAGE_SIZE))
-    browsePage = Math.min(Math.max(1, browsePage), totalPages)
-    const start = (browsePage - 1) * BROWSE_PAGE_SIZE
-    const pageItems = sorted.slice(start, start + BROWSE_PAGE_SIZE)
-
-    if (catalogItems.length === 0) {
-      tableWrap.innerHTML = '<p class="muted inv-browse-empty">Loading catalog…</p>'
-      pageLabel.textContent = 'Page 1 of 10'
-      prevBtn.disabled = true
-      nextBtn.disabled = true
-      return
-    }
-
-    renderInventoryTable(tableWrap, pageItems, 'browse')
-
-    pageLabel.textContent = `Page ${browsePage} of ${totalPages}`
-    prevBtn.disabled = browsePage <= 1
-    nextBtn.disabled = browsePage >= totalPages
-  }
-
   async function loadCatalogBrowse(): Promise<void> {
-    const tableWrap = section.querySelector('#blh-inv-browse-table') as HTMLElement
+    setListChrome('browse')
+    setListVisible(true)
+    showLoading('Loading inventory…')
+    scrollToInventoryList()
+
     try {
       const storeId = await resolveStoreId()
       currentStoreId = storeId
       const items = await listCatalogItems(storeId)
       if (items.length) {
-        catalogItems = items
-        browsePage = 1
-        renderBrowseList()
+        showPagedItems(items, 'browse')
       } else {
+        listItems = []
         tableWrap.innerHTML =
           '<p class="muted inv-browse-empty">No inventory returned for this location. Check API credentials and environment (QA vs Production).</p>'
+        pageLabel.textContent = 'Page 1 of 1'
+        prevBtn.disabled = true
+        nextBtn.disabled = true
       }
     } catch (err) {
+      listItems = []
       tableWrap.innerHTML = `<p class="error inv-browse-empty">${esc(
         err instanceof Error ? err.message : 'Could not load catalog',
       )}</p>`
+      pageLabel.textContent = 'Page 1 of 1'
+      prevBtn.disabled = true
+      nextBtn.disabled = true
     }
   }
 
@@ -638,11 +804,7 @@ export const renderInventory: ViewRender = (root) => {
           sortKey = key
           sortDir = 'asc'
         }
-        if (tableMode === 'browse') {
-          renderBrowseList()
-        } else {
-          renderInventoryTable(resultsEl, sortItems(searchItems, sortKey, sortDir), 'search')
-        }
+        renderPagedList()
       })
     })
 
@@ -677,16 +839,24 @@ export const renderInventory: ViewRender = (root) => {
 
     container.querySelectorAll('[data-apply]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        const query = (btn as HTMLElement).dataset.apply
-        if (!query) return
+        const el = btn as HTMLElement
+        const itemNumber = (el.dataset.itemNumber ?? el.dataset.apply ?? '').trim()
+        if (!itemNumber) return
+        statusEl.textContent = `Adding item #${itemNumber} to the sale…`
+        statusEl.className = 'status'
         const res = await sendToContent({
           type: MSG.APPLY_ITEM_TO_ORDER,
-          saleSearchQuery: query,
+          saleSearchQuery: itemNumber,
+          itemNumber,
+          inventoryItemId: el.dataset.itemId,
         })
         if (res.ok) {
-          statusEl.textContent = res.autoSelected
-            ? `${query} added to the order.`
-            : `${query} in sale search — pick the match if the dropdown shows more than one.`
+          const via = res.addMethod === 'api' ? ' via API' : ''
+          statusEl.textContent =
+            res.message ??
+            `Item #${itemNumber} added to the order${via}.${
+              res.addMethod === 'api' ? ' Refreshing sale…' : ''
+            }`
           statusEl.className = 'status success'
         } else {
           statusEl.textContent = res.error ?? 'Could not apply to order'
@@ -706,59 +876,32 @@ export const renderInventory: ViewRender = (root) => {
 
   searchForm.addEventListener('submit', async (e) => {
     e.preventDefault()
-    currentStoreId = await resolveStoreId()
+    await runInventoryQuery()
+  })
 
-    const query = readSearchQuery(searchForm)
-    statusEl.textContent = ''
-    statusEl.className = 'status'
-
-    if (isSearchQueryEmpty(query)) {
-      searchItems = []
-      setBrowseVisible(true)
-      clearSearchResults()
-      await loadCatalogBrowse()
-      return
-    }
-
-    setBrowseVisible(false)
-    clearSearchResults()
-
-    try {
-      const search = await searchInventory(query, currentStoreId)
-
-      if (search.duplicateWarning) {
-        showDuplicateModal(search.duplicateWarning)
-      }
-
-      if (search.items.length === 0) {
-        searchItems = []
-        resultsEl.innerHTML =
-          '<p class="muted">No matches. Try another location, department, name, vendor item name, or item #.</p>'
-        return
-      }
-
-      searchItems = search.items
-      renderInventoryTable(resultsEl, sortItems(searchItems, sortKey, sortDir), 'search')
-    } catch (err) {
-      searchItems = []
-      resultsEl.innerHTML = `<p class="error">${esc(
-        err instanceof Error ? err.message : 'Search failed',
-      )}</p>`
+  pageSizeSelect.addEventListener('change', () => {
+    const next = Number(pageSizeSelect.value) as InventoryBrowsePageSize
+    if (!INVENTORY_BROWSE_PAGE_SIZES.includes(next)) return
+    uiState.browsePageSize = next
+    listPage = 1
+    void saveInventoryUiState({ browsePageSize: next })
+    if (!browseSection.hidden && listItems.length > 0) {
+      renderPagedList()
     }
   })
 
   section.querySelector('#blh-inv-page-prev')?.addEventListener('click', () => {
-    browsePage -= 1
-    renderBrowseList()
+    listPage -= 1
+    renderPagedList()
   })
   section.querySelector('#blh-inv-page-next')?.addEventListener('click', () => {
-    browsePage += 1
-    renderBrowseList()
+    listPage += 1
+    renderPagedList()
   })
 
   const onContextForBrowse = () => {
     applyContextPrefill()
-    if (!browseSection.hidden && catalogItems.length > 0) renderBrowseList()
+    if (!browseSection.hidden && listItems.length > 0) renderPagedList()
   }
 
   const onStorageChanged = (
@@ -768,6 +911,7 @@ export const renderInventory: ViewRender = (root) => {
     if (area !== 'local' || !changes.inventoryUiState) return
     void loadInventoryUiState().then((state) => {
       uiState = state
+      pageSizeSelect.value = String(state.browsePageSize)
       refreshVisibleTables()
     })
   }

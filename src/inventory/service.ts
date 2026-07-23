@@ -43,9 +43,10 @@ export async function checkDuplicateVariant(
   if ((await resolveDataSource()) === 'mock') {
     return findDuplicateWarning(getMockCatalog(), styleId, size, color)
   }
-  const { duplicateWarning } = await searchInventory(
-    { name: styleId, size, color, locationId: storeId },
-    storeId,
-  )
-  return duplicateWarning
+  // Search by style name only — BridalLive size/color filters are unreliable for
+  // duplicate detection. Exact size+color match is done client-side.
+  const { items } = await searchInventory({ name: styleId, locationId: storeId }, storeId)
+  const styleKey = styleId.trim().toLowerCase()
+  const siblings = items.filter((i) => i.style.trim().toLowerCase() === styleKey)
+  return findDuplicateWarning(siblings.length > 0 ? siblings : items, styleId, size, color)
 }

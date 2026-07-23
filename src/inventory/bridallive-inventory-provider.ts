@@ -172,7 +172,15 @@ async function search(
 
   let duplicateWarning: string | undefined
   if (q.name && q.size && q.color) {
-    duplicateWarning = findDuplicateWarning(collected, q.name, q.size, q.color)
+    // Prefer exact style siblings; size/color matched exactly in findDuplicateWarning.
+    const styleKey = q.name.toLowerCase()
+    const siblings = items.filter((i) => i.style.toLowerCase() === styleKey)
+    duplicateWarning = findDuplicateWarning(
+      siblings.length > 0 ? siblings : items,
+      q.name,
+      q.size,
+      q.color,
+    )
   }
 
   return { items, duplicateWarning }
@@ -215,6 +223,16 @@ async function findSourceItem(
   return null
 }
 
+/** Load all variants of a style at a location for reliable duplicate checks. */
+async function listStyleSiblings(
+  styleId: string,
+  storeId: string,
+): Promise<InventoryItem[]> {
+  const { items } = await search({ name: styleId, locationId: storeId }, storeId)
+  const styleKey = styleId.trim().toLowerCase()
+  return items.filter((i) => i.style.trim().toLowerCase() === styleKey)
+}
+
 async function createVariant(
   payload: InventoryCreateVariantPayload,
   storeId: string,
@@ -226,14 +244,6 @@ async function createVariant(
     return { ok: false, message: 'Style, size, and color are required.' }
   }
 
-  const dupSearch = await search(
-    { name: styleId, size, color, locationId: storeId },
-    storeId,
-  )
-  if (dupSearch.duplicateWarning) {
-    return { ok: false, message: dupSearch.duplicateWarning }
-  }
-
   const source = await findSourceItem(payload.sourceItemNumber, styleId, storeId)
   if (!source) {
     return {
@@ -242,6 +252,25 @@ async function createVariant(
         ? `Could not find source item ${payload.sourceItemNumber} in BridalLive.`
         : `Could not find a source item for style ${styleId}. Use “Use as source” on an existing row first.`,
     }
+  }
+
+  const sourceSize = (source.item.size ?? source.item.sizeString ?? '').trim()
+  const sourceColor = (source.item.color ?? source.item.colorString ?? '').trim()
+  if (
+    sourceSize.toLowerCase() === size.toLowerCase() &&
+    sourceColor.toLowerCase() === color.toLowerCase()
+  ) {
+    const existingNumber = formatItemNumber(source.item) || payload.sourceItemNumber || 'unknown'
+    return {
+      ok: false,
+      message: `This style + size + color already exists as item ${existingNumber} (${sourceSize} / ${sourceColor}). Enter a different size or color.`,
+    }
+  }
+
+  const siblings = await listStyleSiblings(styleId, source.location.id)
+  const dup = findDuplicateWarning(siblings, styleId, size, color)
+  if (dup) {
+    return { ok: false, message: dup }
   }
 
   const creds = await resolveLocationCredentials(source.location.id)
@@ -258,16 +287,29 @@ async function createVariant(
     body: JSON.stringify(body),
   })
 
-  const mapped = mapBridalLiveItem(created ?? body, source.location)
-  const itemNumber = mapped.itemNumber || formatItemNumber(created ?? {})
+  if (!created || (created.id == null && !formatItemNumber(created))) {
+    return {
+      ok: false,
+      message:
+        'BridalLive did not return a created item. The variant may not have been saved — check inventory before retrying.',
+    }
+  }
+
+  const mapped = mapBridalLiveItem(created, source.location)
+  const itemNumber = mapped.itemNumber || formatItemNumber(created)
+  if (!itemNumber) {
+    return {
+      ok: false,
+      message:
+        'BridalLive created a record but returned no item number. Check inventory before retrying or adding to a sale.',
+    }
+  }
 
   return {
     ok: true,
-    itemNumber: itemNumber || undefined,
-    saleSearchQuery: mapped.saleSearchQuery || itemNumber || undefined,
-    message: itemNumber
-      ? `Variant created in BridalLive: ${itemNumber}`
-      : 'Variant created in BridalLive.',
+    itemNumber,
+    saleSearchQuery: mapped.saleSearchQuery || itemNumber,
+    message: `Variant created in BridalLive: ${itemNumber}. Use ⊕ Add to order if you want it on the open sale.`,
   }
 }
 

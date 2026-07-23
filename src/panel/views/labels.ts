@@ -1,8 +1,11 @@
 import { loadLabelsUiState, saveLabelsUiState } from '../../lib/labels-ui-state'
-import { MSG } from '../../lib/messages'
 import type { LabelLineItem } from '../../api/types'
 import type { ReceivingVoucherLine } from '../../labels/types'
 import { printLabelBatch } from '../../labels/print-batch'
+import {
+  inventoryItemToLabelLine,
+  lookupInventoryByItemNumber,
+} from '../../labels/lookup'
 import { AVERY_5160 } from '../../labels/templates'
 import {
   AUTO_STYLE_LAYOUT_ID,
@@ -10,8 +13,17 @@ import {
   getLabelStyleLayout,
   layoutOptionsForDropdown,
 } from '../../labels/style-layouts'
+import {
+  getActiveBridalLiveCredentials,
+  isLocationConfigured,
+  loadBridalLiveApiSettings,
+} from '../../lib/bridallive-credentials'
+import {
+  getReceivingVoucherLines,
+  listReceivingVouchers,
+  type BridalLiveReceivingVoucherSummary,
+} from '../../lib/bridallive-receiving'
 import { getPanelContext } from '../panel-context'
-import { sendToContent } from '../bridge-client'
 import type { ViewRender } from '../router'
 
 const GRID_COLS = AVERY_5160.columns
@@ -77,13 +89,24 @@ export const renderLabels: ViewRender = (root) => {
         <h3 class="subheading" id="blh-receiving-heading">Receiving voucher</h3>
         <span class="labels-badge labels-badge--primary">Main workflow</span>
       </div>
-      <p class="labels-lead">Select lines on the voucher and bulk-print labels — one label per received quantity. Each line uses its own department when Auto layout is selected.</p>
+      <p class="labels-lead">
+        Load real BridalLive receiving vouchers by location, select lines, and bulk-print labels — one label per received quantity.
+      </p>
       <div id="blh-labels-context-banner" class="banner banner-info" hidden></div>
-      <p class="muted small" id="blh-receiving-hint">Loading voucher lines…</p>
+      <div class="form-grid form-grid--compact receiving-controls">
+        <label>Location
+          <select id="blh-receiving-location"></select>
+        </label>
+        <label>Voucher
+          <select id="blh-receiving-voucher"></select>
+        </label>
+      </div>
       <div class="btn-row">
+        <button type="button" class="btn btn-ghost btn-sm" id="blh-receiving-refresh">Refresh vouchers</button>
         <button type="button" class="btn btn-ghost btn-sm" id="blh-receiving-select-all">Select all</button>
         <button type="button" class="btn btn-ghost btn-sm" id="blh-receiving-select-none">Select none</button>
       </div>
+      <p class="muted small" id="blh-receiving-hint">Choose a location to load vouchers…</p>
       <ul id="blh-labels-receiving-list" class="receiving-lines"></ul>
       <button type="button" class="btn btn-primary btn-block" id="blh-labels-receiving">
         Print selected lines (PDF)
@@ -92,9 +115,19 @@ export const renderLabels: ViewRender = (root) => {
 
     <section class="labels-block labels-block--reprint" aria-labelledby="blh-reprint-heading">
       <h3 class="subheading" id="blh-reprint-heading">Reprint label</h3>
-      <p class="muted small">One-off reprint when a tag was torn off. Department is inferred from the item # when using Auto layout.</p>
+      <p class="muted small">
+        Look up by <strong>item #</strong> in BridalLive. Price, size, color, variants, and barcode are loaded from the API.
+      </p>
       <form id="blh-labels-reprint-form" class="form-grid form-grid--compact">
-        <label>Item # <input name="itemNumber" type="text" placeholder="DR-10042" autocomplete="off" /></label>
+        <label>Item #
+          <input
+            name="itemNumber"
+            type="text"
+            placeholder="e.g. 49153"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </label>
         <label>Quantity <input name="quantity" type="number" min="1" value="1" /></label>
         <button type="submit" class="btn btn-reprint">Reprint (PDF)</button>
       </form>
@@ -110,6 +143,9 @@ export const renderLabels: ViewRender = (root) => {
   let labelStyleLayoutId = AUTO_STYLE_LAYOUT_ID
   let receivingLines: ReceivingVoucherLine[] = []
   let selectionByItem: Record<string, boolean> = {}
+  let receivingLocationId = ''
+  let receivingVoucherId: number | null = null
+  let receivingVouchers: BridalLiveReceivingVoucherSummary[] = []
 
   const statusEl = section.querySelector('#blh-labels-status') as HTMLElement
   const startRowEl = section.querySelector('#blh-start-row') as HTMLElement
@@ -117,6 +153,9 @@ export const renderLabels: ViewRender = (root) => {
   const reprintForm = section.querySelector('#blh-labels-reprint-form') as HTMLFormElement
   const styleSelect = section.querySelector('#blh-label-style-layout') as HTMLSelectElement
   const stylePreview = section.querySelector('#blh-label-style-preview') as HTMLElement
+  const locationSelect = section.querySelector('#blh-receiving-location') as HTMLSelectElement
+  const voucherSelect = section.querySelector('#blh-receiving-voucher') as HTMLSelectElement
+  const receivingHint = section.querySelector('#blh-receiving-hint') as HTMLElement
   const scrollRoot = document.getElementById('blh-view-root')
 
   const persistUiState = () => {
@@ -128,6 +167,8 @@ export const renderLabels: ViewRender = (root) => {
       labelStyleLayoutId,
       reprintItemNumber: String(fd.get('itemNumber') ?? ''),
       reprintQuantity: Number(fd.get('quantity')) || 1,
+      receivingLocationId,
+      receivingVoucherId,
       statusText: statusEl.textContent ?? '',
       statusKind: statusEl.classList.contains('success')
         ? 'success'
@@ -216,6 +257,8 @@ export const renderLabels: ViewRender = (root) => {
     startCol = saved.startCol
     labelStyleLayoutId = saved.labelStyleLayoutId ?? AUTO_STYLE_LAYOUT_ID
     selectionByItem = { ...saved.receivingSelected }
+    receivingLocationId = saved.receivingLocationId
+    receivingVoucherId = saved.receivingVoucherId
     styleSelect.value = labelStyleLayoutId
     paintStartLabels()
     paintStylePreview()
@@ -233,29 +276,137 @@ export const renderLabels: ViewRender = (root) => {
     if (scrollRoot && saved.scrollTop > 0) {
       scrollRoot.scrollTop = saved.scrollTop
     }
-
-    if (receivingLines.length > 0) {
-      receivingLines = receivingLines.map((line) => ({
-        ...line,
-        selected: selectionByItem[line.itemNumber] !== false,
-      }))
-      renderReceivingList()
-    }
   }
 
   const paintBanner = () => {
     const banner = section.querySelector('#blh-labels-context-banner') as HTMLElement
-    const hint = section.querySelector('#blh-receiving-hint') as HTMLElement
     const ctx = getPanelContext()
     if (ctx?.screen === 'receiving') {
       banner.hidden = false
       banner.textContent =
-        'Receiving screen open — Phase 2 will load lines from this voucher automatically.'
-      hint.textContent = 'Lines below are mock data until live scrape is wired.'
+        'Receiving screen is open in BridalLive — pick the matching voucher below to print labels.'
     } else {
       banner.hidden = true
-      hint.textContent =
-        'Open a receiving voucher in BridalLive (or Settings → Dev override → Receiving) for the full flow.'
+    }
+  }
+
+  const formatVoucherOption = (v: BridalLiveReceivingVoucherSummary): string => {
+    const date = v.receiveDate
+      ? new Date(v.receiveDate).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : ''
+    return `#${v.number} · ${v.vendorName}${date ? ` · ${date}` : ''} · ${v.status}`
+  }
+
+  const renderVoucherSelect = () => {
+    if (receivingVouchers.length === 0) {
+      voucherSelect.innerHTML = '<option value="">No vouchers found</option>'
+      voucherSelect.disabled = true
+      return
+    }
+    voucherSelect.disabled = false
+    voucherSelect.innerHTML = receivingVouchers
+      .map(
+        (v) =>
+          `<option value="${v.id}">${escapeHtml(formatVoucherOption(v))}</option>`,
+      )
+      .join('')
+    if (
+      receivingVoucherId != null &&
+      receivingVouchers.some((v) => v.id === receivingVoucherId)
+    ) {
+      voucherSelect.value = String(receivingVoucherId)
+    } else {
+      receivingVoucherId = receivingVouchers[0]!.id
+      voucherSelect.value = String(receivingVoucherId)
+    }
+  }
+
+  const loadReceivingLocations = async () => {
+    const settings = await loadBridalLiveApiSettings()
+    const configured = settings.locations.filter(isLocationConfigured)
+    if (configured.length === 0) {
+      locationSelect.innerHTML =
+        '<option value="">Add API credentials in Settings</option>'
+      locationSelect.disabled = true
+      voucherSelect.innerHTML = '<option value="">—</option>'
+      voucherSelect.disabled = true
+      receivingHint.textContent =
+        'Save Production Retailer ID + API key for each location in Settings, then refresh.'
+      return false
+    }
+
+    locationSelect.disabled = false
+    locationSelect.innerHTML = configured
+      .map((l) => `<option value="${escapeHtml(l.id)}">${escapeHtml(l.name)}</option>`)
+      .join('')
+
+    if (!receivingLocationId || !configured.some((l) => l.id === receivingLocationId)) {
+      const active = await getActiveBridalLiveCredentials()
+      receivingLocationId = active?.location.id ?? configured[0]!.id
+    }
+    locationSelect.value = receivingLocationId
+    return true
+  }
+
+  const loadVoucherLines = async () => {
+    if (receivingVoucherId == null || !receivingLocationId) {
+      receivingLines = []
+      renderReceivingList()
+      receivingHint.textContent = 'Select a voucher to load lines.'
+      return
+    }
+
+    receivingHint.textContent = 'Loading voucher lines from BridalLive…'
+    try {
+      const lines = await getReceivingVoucherLines(
+        receivingVoucherId,
+        receivingLocationId,
+      )
+      receivingLines = lines.map((l) => ({
+        ...l,
+        selected: selectionByItem[l.itemNumber] !== false,
+      }))
+      syncSelectionMap()
+      renderReceivingList()
+      const voucher = receivingVouchers.find((v) => v.id === receivingVoucherId)
+      receivingHint.textContent = receivingLines.length
+        ? `${receivingLines.length} line(s) on voucher #${voucher?.number ?? receivingVoucherId}${voucher ? ` · ${voucher.locationName}` : ''}.`
+        : `Voucher #${voucher?.number ?? receivingVoucherId} has no line items.`
+      persistUiState()
+    } catch (err) {
+      receivingLines = []
+      renderReceivingList()
+      receivingHint.textContent =
+        err instanceof Error ? err.message : 'Failed to load voucher lines.'
+    }
+  }
+
+  const loadVouchersForLocation = async () => {
+    if (!receivingLocationId) return
+    receivingHint.textContent = 'Loading receiving vouchers from BridalLive…'
+    voucherSelect.disabled = true
+    try {
+      receivingVouchers = await listReceivingVouchers(receivingLocationId)
+      renderVoucherSelect()
+      if (receivingVouchers.length === 0) {
+        receivingLines = []
+        renderReceivingList()
+        receivingHint.textContent = `No receiving vouchers found for this location.`
+        persistUiState()
+        return
+      }
+      await loadVoucherLines()
+    } catch (err) {
+      receivingVouchers = []
+      renderVoucherSelect()
+      receivingLines = []
+      renderReceivingList()
+      receivingHint.textContent =
+        err instanceof Error ? err.message : 'Failed to load receiving vouchers.'
     }
   }
 
@@ -281,6 +432,7 @@ export const renderLabels: ViewRender = (root) => {
             <code>${escapeHtml(line.itemNumber)}</code>
             × ${line.quantity}
             ${line.style ? ` — ${escapeHtml(line.style)}` : ''}
+            ${line.size || line.color ? ` · ${escapeHtml(line.size || '—')} / ${escapeHtml(line.color || '—')}` : ''}
             ${line.department ? `<span class="tag">${escapeHtml(line.department)}</span>` : ''}
           </span>
         </label>
@@ -339,20 +491,31 @@ export const renderLabels: ViewRender = (root) => {
 
   void (async () => {
     await applySavedUiState()
-
-    const res = await sendToContent({ type: MSG.LABELS_GET_RECEIVING_LINES })
-    if (res.ok && res.receivingLines) {
-      receivingLines = res.receivingLines.map((l) => ({
-        ...l,
-        selected: selectionByItem[l.itemNumber] !== false,
-      }))
-      syncSelectionMap()
-      renderReceivingList()
-    }
+    paintBanner()
+    const ok = await loadReceivingLocations()
+    if (ok) await loadVouchersForLocation()
   })()
 
   paintBanner()
   document.addEventListener('blh-context-updated', paintBanner)
+
+  locationSelect.addEventListener('change', () => {
+    receivingLocationId = locationSelect.value
+    receivingVoucherId = null
+    selectionByItem = {}
+    void loadVouchersForLocation()
+  })
+
+  voucherSelect.addEventListener('change', () => {
+    const id = Number(voucherSelect.value)
+    receivingVoucherId = Number.isFinite(id) ? id : null
+    selectionByItem = {}
+    void loadVoucherLines()
+  })
+
+  section.querySelector('#blh-receiving-refresh')?.addEventListener('click', () => {
+    void loadVouchersForLocation()
+  })
 
   reprintForm.addEventListener('input', () => persistUiState())
   const onScroll = () => persistUiState()
@@ -360,15 +523,42 @@ export const renderLabels: ViewRender = (root) => {
   reprintForm.addEventListener('submit', async (e) => {
     e.preventDefault()
     const fd = new FormData(reprintForm)
-    await runPrint(
-      [
-        {
-          itemNumber: String(fd.get('itemNumber') ?? ''),
-          quantity: Number(fd.get('quantity')) || 1,
-        },
-      ],
-      'Enter an item # to reprint.',
-    )
+    const itemNumber = String(fd.get('itemNumber') ?? '').trim()
+    const quantity = Number(fd.get('quantity')) || 1
+
+    if (!itemNumber) {
+      setStatus('Enter an item # to reprint.', 'error')
+      return
+    }
+
+    const creds = await getActiveBridalLiveCredentials()
+    if (!creds) {
+      setStatus(
+        'Add BridalLive API credentials in Settings (Production) before reprinting live labels.',
+        'error',
+      )
+      return
+    }
+
+    setStatus(`Looking up item #${itemNumber} in BridalLive…`, '')
+    try {
+      const storeId = receivingLocationId || creds.location.id
+      const match = await lookupInventoryByItemNumber(itemNumber, storeId)
+      if (!match) {
+        setStatus(
+          `No inventory found for item #${itemNumber} at ${storeId}.`,
+          'error',
+        )
+        return
+      }
+
+      await runPrint(
+        [inventoryItemToLabelLine(match, quantity)],
+        'Enter an item # to reprint.',
+      )
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Lookup failed', 'error')
+    }
   })
 
   section.querySelector('#blh-receiving-select-all')?.addEventListener('click', () => {
@@ -399,6 +589,7 @@ export const renderLabels: ViewRender = (root) => {
         size: l.size,
         color: l.color,
         department: l.department,
+        vendorItemName: l.vendorItemName,
       })),
       'Select at least one receiving line.',
     )

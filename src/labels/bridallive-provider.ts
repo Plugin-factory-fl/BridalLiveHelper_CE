@@ -1,15 +1,18 @@
 import type { LabelsProvider } from './provider'
 import type { ReceivingVoucherLine } from './types'
 import { mockLabelsProvider } from './mock-provider'
+import { getReceivingVoucherLines, listReceivingVouchers } from '../lib/bridallive-receiving'
 
 /**
- * Phase 2: read receiving table from BridalLive DOM while user is on voucher screen.
- * @see src/bridallive/selectors.ts
+ * Live BridalLive receiving vouchers via API.
+ * Templates stay bundled until department assets are customized per store.
  */
 export const bridalliveLabelsProvider: LabelsProvider = {
-  async getReceivingLines(_storeId: string): Promise<ReceivingVoucherLine[]> {
-    // TODO: scrape BL_SELECTORS.receiving from content script context
-    return mockLabelsProvider.getReceivingLines(_storeId)
+  async getReceivingLines(storeId: string): Promise<ReceivingVoucherLine[]> {
+    const vouchers = await listReceivingVouchers(storeId)
+    const first = vouchers[0]
+    if (!first) return []
+    return getReceivingVoucherLines(first.id, storeId)
   },
 
   async listTemplates(storeId: string) {

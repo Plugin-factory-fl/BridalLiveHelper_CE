@@ -23,12 +23,17 @@ export type LabelTemplate = {
 }
 
 export type LabelLineItem = {
+  /** BridalLive item number — preferred once resolved. */
   itemNumber: string
   quantity: number
+  /** Lookup key for reprint (preferred over item # when searching live inventory). */
+  vendorItemName?: string
   style?: string
   size?: string
   color?: string
   department?: Department
+  retailPrice?: number
+  salePrice?: number
 }
 
 export type LabelPrintBatchRequest = {

@@ -62,7 +62,12 @@ export type ExtensionMessage =
       type: typeof MSG.INVENTORY_CREATE_VARIANT
       payload: InventoryCreateVariantPayload
     }
-  | { type: typeof MSG.APPLY_ITEM_TO_ORDER; saleSearchQuery: string }
+  | {
+      type: typeof MSG.APPLY_ITEM_TO_ORDER
+      saleSearchQuery: string
+      itemNumber?: string
+      inventoryItemId?: string
+    }
   | { type: typeof MSG.LABELS_PRINT_BATCH; request: LabelPrintBatchRequest }
   | { type: typeof MSG.LABELS_GET_RECEIVING_LINES }
   | { type: typeof MSG.LABELS_LIST_TEMPLATES }
@@ -70,8 +75,11 @@ export type ExtensionMessage =
 export type ExtensionResponse = {
   ok: boolean
   error?: string
+  message?: string
   /** True when sale typeahead had one row and we clicked it to add the line */
   autoSelected?: boolean
+  /** How the item was added to the open sale */
+  addMethod?: 'api' | 'dom'
   context?: BridalLiveContext
   search?: InventorySearchResponse
   catalogItems?: InventoryItem[]

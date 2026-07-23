@@ -6,10 +6,13 @@ import {
   searchInventory,
 } from '../inventory/service'
 import { applySaleSearchToOrder } from './order-context'
-import { MSG, type ExtensionMessage, type ExtensionResponse } from '../lib/messages'
+import { readOpenPosTransaction } from './pos-transaction'
+import { addInventoryItemToPosTransaction } from '../lib/bridallive-pos'
 import { getActiveBridalLiveCredentials } from '../lib/bridallive-credentials'
+import { MSG, type ExtensionMessage, type ExtensionResponse } from '../lib/messages'
 import { loadPreferences } from '../lib/storage'
 import { detectContext, parseDevScreenOverride } from './context'
+import { log, warn } from '../lib/log'
 
 let latestContext = detectContext()
 
@@ -99,10 +102,46 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
     }
 
     case MSG.APPLY_ITEM_TO_ORDER: {
-      const result = await applySaleSearchToOrder(message.saleSearchQuery)
+      const itemNumber = (message.itemNumber ?? message.saleSearchQuery).trim()
+      if (!itemNumber) {
+        return { ok: false, error: 'Item number is required to add to the order.' }
+      }
+
+      const creds = await getActiveBridalLiveCredentials()
+      const openTrx = readOpenPosTransaction()
+
+      if (creds && openTrx && (openTrx.id || openTrx.trxNumber)) {
+        try {
+          const apiResult = await addInventoryItemToPosTransaction({
+            itemNumber,
+            inventoryItemId: message.inventoryItemId,
+            posTransactionId: openTrx.id,
+            trxNumber: openTrx.trxNumber,
+            storeId: creds.location.id,
+          })
+          if (apiResult.ok) {
+            log('add to order via API', apiResult.message)
+            // Reload so the open sale reflects the new line item.
+            window.setTimeout(() => {
+              location.reload()
+            }, 250)
+            return {
+              ok: true,
+              autoSelected: true,
+              addMethod: 'api',
+              message: apiResult.message,
+            }
+          }
+          warn('API addLineItem failed, falling back to DOM', apiResult.message)
+        } catch (err) {
+          warn('API addLineItem threw, falling back to DOM', err)
+        }
+      }
+
+      const result = await applySaleSearchToOrder(itemNumber)
       return result.ok
-        ? { ok: true, autoSelected: result.autoSelected }
-        : { ok: false, error: result.error }
+        ? { ok: true, autoSelected: result.autoSelected, addMethod: 'dom' }
+        : { ok: false, error: result.error, addMethod: 'dom' }
     }
 
     case MSG.INVENTORY_CREATE_VARIANT: {

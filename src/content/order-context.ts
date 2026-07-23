@@ -604,10 +604,69 @@ type ScopeWithChooseItem = AngularScope & {
   items?: unknown[]
 }
 
-/** Fallback when grid rows lack ng-click in DOM — call BL chooseItem on scope. */
-function tryAngularChooseSingleMatch(searchInput: HTMLInputElement): boolean {
+function itemNumberFromUnknown(value: unknown): string | null {
+  if (value == null) return null
+  if (typeof value === 'string' || typeof value === 'number') {
+    const s = String(value).trim()
+    return s || null
+  }
+  if (typeof value !== 'object') return null
+  const obj = value as Record<string, unknown>
+  for (const key of ['itemNumber', 'itemNumberString', 'itemNbr', 'number']) {
+    const raw = obj[key]
+    if (raw != null && String(raw).trim()) return String(raw).trim()
+  }
+  return null
+}
+
+/** Pull Item # from a typeahead grid row (prefers the Item # column). */
+function extractItemNumberFromRow(row: HTMLElement): string | null {
+  const cells = Array.from(row.querySelectorAll('td'))
+  if (cells.length > 0) {
+    for (const cell of cells.slice(0, 3)) {
+      const text = cell.textContent?.trim() ?? ''
+      if (/^\d{3,}$/.test(text)) return text
+    }
+  }
+
+  const labeled = row.querySelector(
+    '[data-title*="Item"], [aria-label*="Item"], .item-number, .itemNumber',
+  )
+  const labeledText = labeled?.textContent?.trim()
+  if (labeledText && /^\d{3,}$/.test(labeledText)) return labeledText
+
+  const text = row.textContent ?? ''
+  const match = text.match(/\b(\d{4,})\b/)
+  return match?.[1] ?? null
+}
+
+function findExactItemNumberRow(
+  rows: HTMLElement[],
+  itemNumber: string,
+): HTMLElement | null {
+  const want = itemNumber.trim()
+  if (!want) return null
+
+  for (const row of rows) {
+    const fromCells = extractItemNumberFromRow(row)
+    if (fromCells === want) return findTypeaheadClickTarget(row)
+
+    for (const cell of Array.from(row.querySelectorAll('td'))) {
+      if (cell.textContent?.trim() === want) return findTypeaheadClickTarget(row)
+    }
+  }
+  return null
+}
+
+/** Prefer chooseItem only when the match's item # equals the requested number. */
+function tryAngularChooseExactMatch(
+  searchInput: HTMLInputElement,
+  itemNumber: string,
+): boolean {
   const angular = getAngular()
   if (!angular) return false
+  const want = itemNumber.trim()
+  if (!want) return false
 
   let done = false
   const visit = (scope: AngularScope | null | undefined) => {
@@ -616,12 +675,13 @@ function tryAngularChooseSingleMatch(searchInput: HTMLInputElement): boolean {
     if (typeof s.chooseItem === 'function') {
       const lists = [s.matches, s.items].filter((x): x is unknown[] => Array.isArray(x))
       for (const list of lists) {
-        if (list.length === 1) {
+        const match = list.find((entry) => itemNumberFromUnknown(entry) === want)
+        if (match) {
           try {
-            s.chooseItem(list[0])
+            s.chooseItem(match)
             applyDigest(searchInput)
             done = true
-            log('step 5: chooseItem via Angular scope')
+            log('step 5: chooseItem exact item #', want)
             return
           } catch (e) {
             warn('chooseItem failed', e)
@@ -637,7 +697,7 @@ function tryAngularChooseSingleMatch(searchInput: HTMLInputElement): boolean {
     visit(angular.element(searchInput).scope())
     visit(angular.element(document.body).scope())
   } catch (e) {
-    warn('tryAngularChooseSingleMatch', e)
+    warn('tryAngularChooseExactMatch', e)
   }
   return done
 }
@@ -669,14 +729,16 @@ function clickTypeaheadTarget(target: HTMLElement): void {
 }
 
 /**
- * When item-number search returns exactly one grid row, click it (chooseItem).
- * Skips settings menus and does not simulate Enter (avoids permission modals).
+ * Auto-select only when a typeahead row's Item # exactly matches.
+ * Never picks a lone fuzzy/partial match.
  */
-async function tryAutoSelectSingleTypeaheadResult(
+async function tryAutoSelectExactTypeaheadResult(
   searchInput: HTMLInputElement,
+  itemNumber: string,
 ): Promise<boolean> {
   await delay(TYPEAHEAD_INITIAL_MS)
   const deadline = Date.now() + TYPEAHEAD_POLL_MAX
+  const want = itemNumber.trim()
 
   while (Date.now() < deadline) {
     if (isSettingsPanelOpen(searchInput)) {
@@ -684,36 +746,47 @@ async function tryAutoSelectSingleTypeaheadResult(
       continue
     }
 
+    if (tryAngularChooseExactMatch(searchInput, want)) {
+      await delay(STEP_MS)
+      return true
+    }
+
     for (const popup of findItemSearchTypeaheadPopups(searchInput)) {
       if (typeaheadMenuShowsNoResults(popup)) continue
 
       const rows = getTypeaheadDataRows(popup)
-      const highlighted = findHighlightedGridRow(popup)
-      let pick: HTMLElement | null = null
-      if (rows.length === 1) pick = rows[0]
-      else if (highlighted && rows.length <= 1) pick = highlighted
-
-      if (pick) {
-        log('step 5: auto-select grid row', pick.textContent?.trim().slice(0, 120))
-        clickTypeaheadTarget(pick)
+      const exact = findExactItemNumberRow(rows, want)
+      if (exact) {
+        log('step 5: auto-select exact item # row', want, exact.textContent?.trim().slice(0, 120))
+        clickTypeaheadTarget(exact)
         await delay(STEP_MS)
-        if (tryAngularChooseSingleMatch(searchInput)) return true
+        tryAngularChooseExactMatch(searchInput, want)
         return true
       }
-      if (rows.length > 1) {
-        log('typeahead grid rows (skip until one)', rows.length)
-      }
-    }
 
-    if (tryAngularChooseSingleMatch(searchInput)) {
-      await delay(STEP_MS)
-      return true
+      const highlighted = findHighlightedGridRow(popup)
+      if (highlighted && extractItemNumberFromRow(highlighted) === want) {
+        clickTypeaheadTarget(highlighted)
+        await delay(STEP_MS)
+        return true
+      }
+
+      if (rows.length > 0) {
+        log(
+          'typeahead rows without exact item # match',
+          rows.length,
+          'want=',
+          want,
+          'seen=',
+          rows.map((r) => extractItemNumberFromRow(r)).filter(Boolean).slice(0, 8),
+        )
+      }
     }
 
     await delay(TYPEAHEAD_POLL_MS)
   }
 
-  warn('typeahead auto-select: no single data row within timeout')
+  warn('typeahead auto-select: no exact item # match within timeout', want)
   return false
 }
 
@@ -730,7 +803,10 @@ export function readOrderLineHints(): OrderLineHints | null {
   return { itemNumber, style, size, color }
 }
 
-/** Switches to Item number search, fills query, auto-selects when typeahead has one row. */
+/**
+ * Switches to Item number search, fills the exact item #, and selects only an
+ * exact typeahead match (never a fuzzy single hit).
+ */
 export async function applySaleSearchToOrder(
   saleSearchQuery: string,
 ): Promise<{ ok: boolean; error?: string; autoSelected?: boolean }> {
@@ -762,12 +838,12 @@ export async function applySaleSearchToOrder(
   try {
     await switchToItemNumberSearchMode(el)
 
-    log('step 4: fill sale search with item number')
+    log('step 4: fill sale search with exact item number', trimmed)
     el.focus()
     await delay(STEP_MS)
     syncBridalLiveSaleSearchModel(el, trimmed)
 
-    const autoSelected = await tryAutoSelectSingleTypeaheadResult(el)
+    const autoSelected = await tryAutoSelectExactTypeaheadResult(el, trimmed)
 
     log('applySaleSearchToOrder done', {
       query: trimmed,
@@ -775,7 +851,15 @@ export async function applySaleSearchToOrder(
       autoSelected,
     })
 
-    return { ok: true, autoSelected }
+    if (!autoSelected) {
+      return {
+        ok: false,
+        autoSelected: false,
+        error: `Could not find exact item # ${trimmed} in the sale search dropdown. Check that you are on a sale for the same store, then try again or pick the row manually.`,
+      }
+    }
+
+    return { ok: true, autoSelected: true }
   } catch (e) {
     warn('applySaleSearchToOrder failed', e)
     return {

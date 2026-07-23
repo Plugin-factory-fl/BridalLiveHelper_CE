@@ -9,6 +9,8 @@ export type LabelsUiState = {
   labelStyleLayoutId: string
   reprintItemNumber: string
   reprintQuantity: number
+  receivingLocationId: string
+  receivingVoucherId: number | null
   statusText: string
   statusKind: '' | 'success' | 'error'
   /** Scroll position of `.panel-main` while on Labels view. */
@@ -22,6 +24,8 @@ const DEFAULTS: LabelsUiState = {
   labelStyleLayoutId: AUTO_STYLE_LAYOUT_ID,
   reprintItemNumber: '',
   reprintQuantity: 1,
+  receivingLocationId: '',
+  receivingVoucherId: null,
   statusText: '',
   statusKind: '',
   scrollTop: 0,
@@ -29,12 +33,15 @@ const DEFAULTS: LabelsUiState = {
 
 export async function loadLabelsUiState(): Promise<LabelsUiState> {
   const data = await chrome.storage.local.get(STORAGE_KEYS.labelsUiState)
-  const raw = data[STORAGE_KEYS.labelsUiState] as Partial<LabelsUiState> | undefined
+  const raw = data[STORAGE_KEYS.labelsUiState] as Partial<LabelsUiState> & {
+    reprintVendorItemName?: string
+  } | undefined
   if (!raw) return { ...DEFAULTS }
   return {
     ...DEFAULTS,
     ...raw,
     receivingSelected: raw.receivingSelected ?? {},
+    reprintItemNumber: raw.reprintItemNumber || raw.reprintVendorItemName || '',
   }
 }
 

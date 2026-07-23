@@ -1,11 +1,11 @@
-import { getDataSource } from '../lib/data-source'
+import { resolveDataSource } from '../lib/data-source'
 import { bridalliveLabelsProvider } from './bridallive-provider'
 import { mockLabelsProvider } from './mock-provider'
 import { renderLabelsProvider } from './render-provider'
 import type { LabelsProvider } from './provider'
 
-export function getLabelsProvider(): LabelsProvider {
-  switch (getDataSource()) {
+export async function getLabelsProvider(): Promise<LabelsProvider> {
+  switch (await resolveDataSource()) {
     case 'bridallive':
       return bridalliveLabelsProvider
     case 'render':

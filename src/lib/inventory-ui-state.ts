@@ -16,10 +16,18 @@ export type InventoryColumnId = (typeof INVENTORY_COLUMN_IDS)[number]
 
 export type InventoryColumnVisibility = Record<InventoryColumnId, boolean>
 
+export type InventoryBrowsePageSize = 10 | 20 | 30 | 40
+
+export const INVENTORY_BROWSE_PAGE_SIZES: readonly InventoryBrowsePageSize[] = [
+  10, 20, 30, 40,
+] as const
+
 export type InventoryUiState = {
   columns: InventoryColumnVisibility
   /** Optional per-column pixel widths (from user resize). */
   columnWidths: Partial<Record<InventoryColumnId, number>>
+  /** How many browse-catalog rows to show per page. */
+  browsePageSize: InventoryBrowsePageSize
 }
 
 /** Defaults match Ricky’s call: no Dept column; Vendor Item Name on; Image already omitted. */
@@ -34,10 +42,7 @@ export const DEFAULT_INVENTORY_COLUMNS: InventoryColumnVisibility = {
   qty: true,
 }
 
-const DEFAULTS: InventoryUiState = {
-  columns: { ...DEFAULT_INVENTORY_COLUMNS },
-  columnWidths: {},
-}
+const DEFAULT_BROWSE_PAGE_SIZE: InventoryBrowsePageSize = 10
 
 export const INVENTORY_COLUMN_LABELS: Record<InventoryColumnId, string> = {
   name: 'Name',
@@ -50,13 +55,27 @@ export const INVENTORY_COLUMN_LABELS: Record<InventoryColumnId, string> = {
   qty: 'Qty',
 }
 
+function parseBrowsePageSize(value: unknown): InventoryBrowsePageSize {
+  const n = Number(value)
+  return INVENTORY_BROWSE_PAGE_SIZES.includes(n as InventoryBrowsePageSize)
+    ? (n as InventoryBrowsePageSize)
+    : DEFAULT_BROWSE_PAGE_SIZE
+}
+
 export async function loadInventoryUiState(): Promise<InventoryUiState> {
   const data = await chrome.storage.local.get(STORAGE_KEYS.inventoryUiState)
   const raw = data[STORAGE_KEYS.inventoryUiState] as Partial<InventoryUiState> | undefined
-  if (!raw) return { columns: { ...DEFAULT_INVENTORY_COLUMNS }, columnWidths: {} }
+  if (!raw) {
+    return {
+      columns: { ...DEFAULT_INVENTORY_COLUMNS },
+      columnWidths: {},
+      browsePageSize: DEFAULT_BROWSE_PAGE_SIZE,
+    }
+  }
   return {
     columns: { ...DEFAULT_INVENTORY_COLUMNS, ...raw.columns },
     columnWidths: { ...raw.columnWidths },
+    browsePageSize: parseBrowsePageSize(raw.browsePageSize),
   }
 }
 
@@ -68,6 +87,10 @@ export async function saveInventoryUiState(patch: Partial<InventoryUiState>): Pr
       columnWidths: patch.columnWidths
         ? { ...current.columnWidths, ...patch.columnWidths }
         : current.columnWidths,
+      browsePageSize:
+        patch.browsePageSize !== undefined
+          ? parseBrowsePageSize(patch.browsePageSize)
+          : current.browsePageSize,
     },
   })
 }

@@ -8,11 +8,11 @@ export type { ReceivingVoucherLine, LabelPrintBatchResult } from './types'
 export { MOCK_VOUCHER_LINES as MOCK_RECEIVING_LINES } from './mock-provider'
 
 export async function getReceivingLines(storeId: string): Promise<ReceivingVoucherLine[]> {
-  return getLabelsProvider().getReceivingLines(storeId)
+  return (await getLabelsProvider()).getReceivingLines(storeId)
 }
 
 export async function listLabelTemplates(storeId: string): Promise<LabelTemplate[]> {
-  return getLabelsProvider().listTemplates(storeId)
+  return (await getLabelsProvider()).listTemplates(storeId)
 }
 
 export { printLabelBatch } from './print-batch'

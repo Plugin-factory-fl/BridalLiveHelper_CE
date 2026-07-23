@@ -51,15 +51,15 @@ export function findDuplicateWarning(
   color: string,
 ): string | undefined {
   const s = style.trim().toLowerCase()
-  const sz = size.trim()
+  const sz = size.trim().toLowerCase()
   const c = color.trim().toLowerCase()
   if (!s || !sz || !c) return undefined
 
   const dup = items.find(
     (i) =>
       i.style.toLowerCase() === s &&
-      i.size === sz &&
-      i.color.toLowerCase() === c,
+      i.size.trim().toLowerCase() === sz &&
+      i.color.trim().toLowerCase() === c,
   )
   if (!dup) return undefined
   return `This style + size + color already exists at ${dup.locationName} as item ${dup.itemNumber} (${dup.size} / ${dup.color}).`
