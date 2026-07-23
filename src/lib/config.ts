@@ -55,12 +55,21 @@ export const API_BASE_URL =
 /** Chrome PDF viewer open parameter — 100% scale, not fit-to-page. */
 export const PDF_VIEWER_ZOOM = '#zoom=100'
 
+export type FontSizePreference = 'small' | 'medium' | 'large'
+
+export const FONT_SIZE_OPTIONS: readonly FontSizePreference[] = [
+  'small',
+  'medium',
+  'large',
+] as const
+
 export const STORAGE_KEYS = {
   panelOpen: 'panelOpen',
   panelWidth: 'panelWidth',
   activeView: 'activeView',
   mockStoreId: 'mockStoreId',
   devScreenOverride: 'devScreenOverride',
+  fontSize: 'fontSize',
   labelsUiState: 'labelsUiState',
   inventoryUiState: 'inventoryUiState',
   lastBridalLiveContext: 'lastBridalLiveContext',

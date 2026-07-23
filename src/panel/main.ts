@@ -1,5 +1,6 @@
 import type { ActiveView } from '../lib/config'
 import { MSG } from '../lib/messages'
+import { applyFontSizePreference, loadPreferences } from '../lib/storage'
 import { connectPanelLifecycle, onContextUpdate, sendToContent } from './bridge-client'
 import { navigate, registerView } from './router'
 import { initPanelContextFromStorage, setPanelContext } from './panel-context'
@@ -62,13 +63,15 @@ function wireContext(): void {
 }
 
 async function init(): Promise<void> {
+  const prefs = await loadPreferences()
+  applyFontSizePreference(prefs.fontSize)
+
   await initPanelContextFromStorage()
   connectPanelLifecycle()
   wireNav()
   wireContext()
 
-  const stored = await chrome.storage.local.get('activeView')
-  const initial = (stored.activeView as ActiveView) ?? 'home'
+  const initial = prefs.activeView ?? 'home'
   showView(initial)
 
   const ctxRes = await sendToContent({ type: MSG.GET_CONTEXT })

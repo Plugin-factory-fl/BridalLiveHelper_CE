@@ -1,9 +1,16 @@
 import { MSG } from '../../lib/messages'
-import { getDataSourceLabel } from '../../lib/data-source'
+import { resolveDataSourceLabel } from '../../lib/data-source'
 import { listStores } from '../../api/client'
-import { loadPreferences } from '../../lib/storage'
+import {
+  applyFontSizePreference,
+  loadPreferences,
+  savePreferences,
+} from '../../lib/storage'
+import type { FontSizePreference } from '../../lib/config'
+import { clearBridalLiveSessions, testBridalLiveConnection } from '../../lib/bridallive-auth'
 import {
   credentialsStatusLabel,
+  isLocationConfigured,
   loadBridalLiveApiSettings,
   saveBridalLiveApiSettings,
   type BridalLiveApiEnvironment,
@@ -77,9 +84,19 @@ export const renderSettings: ViewRender = (root) => {
   section.innerHTML = `
     <h2 class="view-title">Settings</h2>
     <p class="data-source-badge" id="blh-data-source"></p>
-    <p class="muted small">MVP uses mock data end-to-end. Phase 2 swaps the provider layer for BridalLive API — no panel redesign.</p>
+    <p class="muted small">
+      When Retailer ID + API key are saved below, inventory search and variant create use the BridalLive API.
+      Add-to-order still uses the open BridalLive tab.
+    </p>
     <form id="blh-settings-form" class="form-stack">
-      <label>Mock store
+      <label>Text size
+        <select name="fontSize" id="blh-font-size">
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large">Large</option>
+        </select>
+      </label>
+      <label>Active store
         <select name="mockStoreId" id="blh-store-select"></select>
       </label>
       <label>Dev screen override
@@ -97,9 +114,9 @@ export const renderSettings: ViewRender = (root) => {
         <div class="inv-column-toggles" id="blh-inv-column-toggles"></div>
       </fieldset>
       <fieldset class="fieldset" id="blh-api-credentials">
-        <legend>BridalLive API (Phase 2)</legend>
+        <legend>BridalLive API</legend>
         <p class="muted small">
-          Stored only in this browser (<code>chrome.storage.local</code>). Use QA credentials until sandbox testing is done; each location needs its own Retailer ID and API key.
+          Stored only in this browser. Use <strong>QA</strong> until sandbox testing is done. Each location needs its own Retailer ID and API key from Settings → Account → API.
         </p>
         <p class="bl-api-status muted small" id="blh-api-status" role="status"></p>
         <label>API environment
@@ -115,9 +132,14 @@ export const renderSettings: ViewRender = (root) => {
           </select>
         </label>
         <div id="blh-api-locations" class="bl-api-locations"></div>
-        <button type="button" class="btn btn-ghost btn-sm" id="blh-api-clear">
-          Clear API credentials
-        </button>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary btn-sm" id="blh-api-test">
+            Test API connection
+          </button>
+          <button type="button" class="btn btn-ghost btn-sm" id="blh-api-clear">
+            Clear API credentials
+          </button>
+        </div>
       </fieldset>
       <button type="submit" class="btn btn-primary">Save</button>
     </form>
@@ -127,8 +149,6 @@ export const renderSettings: ViewRender = (root) => {
   root.appendChild(section)
 
   const badge = section.querySelector('#blh-data-source') as HTMLElement
-  badge.textContent = `Data source: ${getDataSourceLabel()}`
-
   const togglesEl = section.querySelector('#blh-inv-column-toggles') as HTMLElement
   const locationsEl = section.querySelector('#blh-api-locations') as HTMLElement
   const apiStatusEl = section.querySelector('#blh-api-status') as HTMLElement
@@ -136,6 +156,27 @@ export const renderSettings: ViewRender = (root) => {
   const apiActiveSelect = section.querySelector(
     '#blh-api-active-location',
   ) as HTMLSelectElement
+  const storeSelect = section.querySelector('#blh-store-select') as HTMLSelectElement
+  const fontSizeSelect = section.querySelector('#blh-font-size') as HTMLSelectElement
+  const status = section.querySelector('#blh-settings-status') as HTMLElement
+
+  const refreshDataSourceBadge = async () => {
+    badge.textContent = `Data source: ${await resolveDataSourceLabel()}`
+  }
+
+  const refreshStoreSelect = async (preferredId?: string) => {
+    const stores = await listStores()
+    const prefs = await loadPreferences()
+    const selected = preferredId || prefs.mockStoreId
+    storeSelect.innerHTML = stores
+      .map((s) => `<option value="${s.id}">${s.name}</option>`)
+      .join('')
+    if (stores.some((s) => s.id === selected)) {
+      storeSelect.value = selected
+    } else if (stores[0]) {
+      storeSelect.value = stores[0].id
+    }
+  }
 
   const applyApiSettingsToForm = (settings: BridalLiveApiSettings) => {
     apiEnvSelect.value = settings.environment
@@ -144,16 +185,16 @@ export const renderSettings: ViewRender = (root) => {
     apiStatusEl.textContent = credentialsStatusLabel(settings)
   }
 
-  void listStores().then((stores) => {
-    const select = section.querySelector('#blh-store-select') as HTMLSelectElement
-    select.innerHTML = stores
-      .map((s) => `<option value="${s.id}">${s.name}</option>`)
-      .join('')
-    void loadPreferences().then((prefs) => {
-      select.value = prefs.mockStoreId
-      const dev = section.querySelector('#blh-dev-screen') as HTMLSelectElement
-      dev.value = prefs.devScreenOverride ?? ''
-    })
+  void refreshDataSourceBadge()
+  void refreshStoreSelect().then(async () => {
+    const prefs = await loadPreferences()
+    const dev = section.querySelector('#blh-dev-screen') as HTMLSelectElement
+    dev.value = prefs.devScreenOverride ?? ''
+    fontSizeSelect.value = prefs.fontSize
+  })
+
+  fontSizeSelect.addEventListener('change', () => {
+    applyFontSizePreference(fontSizeSelect.value as FontSizePreference)
   })
 
   void loadInventoryUiState().then((state) => {
@@ -169,9 +210,31 @@ export const renderSettings: ViewRender = (root) => {
   void loadBridalLiveApiSettings().then(applyApiSettingsToForm)
 
   const form = section.querySelector('#blh-settings-form') as HTMLFormElement
-  const status = section.querySelector('#blh-settings-status') as HTMLElement
+
+  section.querySelector('#blh-api-test')?.addEventListener('click', async () => {
+    status.textContent = 'Testing API login…'
+    status.className = 'status'
+    try {
+      clearBridalLiveSessions()
+      const draft = await saveBridalLiveApiSettings({
+        environment: (apiEnvSelect.value as BridalLiveApiEnvironment) || 'qa',
+        activeLocationId: apiActiveSelect.value || 'poughkeepsie',
+        locations: readLocationsFromForm(new FormData(form)),
+      })
+      applyApiSettingsToForm(draft)
+      const message = await testBridalLiveConnection(draft.activeLocationId)
+      status.textContent = message
+      status.className = 'status success'
+      await refreshDataSourceBadge()
+      await refreshStoreSelect(draft.activeLocationId)
+    } catch (err) {
+      status.textContent = err instanceof Error ? err.message : 'API test failed'
+      status.className = 'status error'
+    }
+  })
 
   section.querySelector('#blh-api-clear')?.addEventListener('click', async () => {
+    clearBridalLiveSessions()
     const cleared = await saveBridalLiveApiSettings({
       environment: (apiEnvSelect.value as BridalLiveApiEnvironment) || 'qa',
       activeLocationId: apiActiveSelect.value || 'poughkeepsie',
@@ -181,7 +244,9 @@ export const renderSettings: ViewRender = (root) => {
       ],
     })
     applyApiSettingsToForm(cleared)
-    status.textContent = 'API credentials cleared.'
+    await refreshStoreSelect()
+    await refreshDataSourceBadge()
+    status.textContent = 'API credentials cleared. Inventory will use mock data.'
     status.className = 'status success'
   })
 
@@ -193,12 +258,12 @@ export const renderSettings: ViewRender = (root) => {
     for (const id of INVENTORY_COLUMN_IDS) {
       columns[id] = fd.get(`col-${id}`) === id
     }
-    // Keep at least one data column visible.
     if (!INVENTORY_COLUMN_IDS.some((id) => columns[id])) {
       columns.name = true
       columns.itemNumber = true
     }
 
+    clearBridalLiveSessions()
     const apiSettings = await saveBridalLiveApiSettings({
       environment: (String(fd.get('blApiEnvironment') || 'qa') === 'production'
         ? 'production'
@@ -208,14 +273,30 @@ export const renderSettings: ViewRender = (root) => {
     })
     applyApiSettingsToForm(apiSettings)
 
-    await chrome.storage.local.set({
-      mockStoreId: String(fd.get('mockStoreId') ?? 'store-1'),
+    const activeConfigured = apiSettings.locations.find(
+      (l) => l.id === apiSettings.activeLocationId && isLocationConfigured(l),
+    )
+    const storeId =
+      activeConfigured?.id ||
+      String(fd.get('mockStoreId') ?? '') ||
+      apiSettings.activeLocationId
+
+    await savePreferences({
+      mockStoreId: storeId,
       devScreenOverride: String(fd.get('devScreenOverride') ?? '') || null,
+      fontSize: (String(fd.get('fontSize') || 'small') as FontSizePreference),
     })
+    applyFontSizePreference(
+      (String(fd.get('fontSize') || 'small') as FontSizePreference),
+    )
     await saveInventoryUiState({ columns })
+    await refreshStoreSelect(storeId)
+    await refreshDataSourceBadge()
 
     await sendToContent({ type: MSG.GET_CONTEXT })
-    status.textContent = 'Settings saved.'
+    status.textContent = activeConfigured
+      ? 'Settings saved. Inventory will use BridalLive API.'
+      : 'Settings saved.'
     status.className = 'status success'
   })
 }

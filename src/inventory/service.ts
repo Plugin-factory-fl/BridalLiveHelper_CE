@@ -1,6 +1,6 @@
 import type { InventoryItem, InventorySearchQuery } from '../types/inventory'
 import { getMockCatalog, findDuplicateWarning } from './mock-provider'
-import { getDataSource } from '../lib/data-source'
+import { resolveDataSource } from '../lib/data-source'
 import { getInventoryProvider } from './provider'
 import type {
   InventoryCreateVariantPayload,
@@ -15,14 +15,14 @@ export async function searchInventory(
   return getInventoryProvider().search(query, storeId)
 }
 
-/** Full mock catalog A–Z by item name (style); used for browse UI in the panel. */
+/** Catalog browse — full mock list in MVP; live API list (paged) in Phase 2. */
 export async function listCatalogItems(_storeId: string): Promise<InventoryItem[]> {
-  if (getDataSource() === 'mock') {
+  if ((await resolveDataSource()) === 'mock') {
     return [...getMockCatalog()].sort((a, b) =>
       a.saleSearchQuery.localeCompare(b.saleSearchQuery, undefined, { sensitivity: 'base' }),
     )
   }
-  const { items } = await searchInventory({}, _storeId)
+  const { items } = await searchInventory({ locationId: _storeId }, _storeId)
   return items
 }
 
@@ -33,16 +33,19 @@ export async function createVariant(
   return getInventoryProvider().createVariant(payload, storeId)
 }
 
-/** Check style+size+color against catalog (mock or post-search). */
+/** Check style+size+color against catalog (mock or live search). */
 export async function checkDuplicateVariant(
   styleId: string,
   size: string,
   color: string,
   storeId: string,
 ): Promise<string | undefined> {
-  if (getDataSource() === 'mock') {
+  if ((await resolveDataSource()) === 'mock') {
     return findDuplicateWarning(getMockCatalog(), styleId, size, color)
   }
-  const { duplicateWarning } = await searchInventory({ style: styleId, size, color }, storeId)
+  const { duplicateWarning } = await searchInventory(
+    { name: styleId, size, color, locationId: storeId },
+    storeId,
+  )
   return duplicateWarning
 }

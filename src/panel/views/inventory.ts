@@ -8,6 +8,13 @@ import {
   type InventoryColumnId,
   type InventoryUiState,
 } from '../../lib/inventory-ui-state'
+import { getActiveBridalLiveCredentials } from '../../lib/bridallive-credentials'
+import {
+  checkDuplicateVariant,
+  createVariant,
+  listCatalogItems,
+  searchInventory,
+} from '../../inventory/service'
 import { getPanelContext } from '../panel-context'
 import { showModal } from '../modal'
 import { copyableCellHtml, wireCopyItemButtons } from '../copy-item'
@@ -20,6 +27,14 @@ import {
 } from '../../types/inventory'
 import type { BridalLiveContext } from '../../types/context'
 import type { ViewRender } from '../router'
+
+async function resolveStoreId(): Promise<string> {
+  const stored = await chrome.storage.local.get('mockStoreId')
+  const fromPrefs = String(stored.mockStoreId ?? '').trim()
+  if (fromPrefs) return fromPrefs
+  const creds = await getActiveBridalLiveCredentials()
+  return creds?.location.id ?? 'store-1'
+}
 
 function esc(s: string): string {
   return s
@@ -263,8 +278,8 @@ export const renderInventory: ViewRender = (root) => {
   }
   let tableMode: 'browse' | 'search' = 'browse'
 
-  void chrome.storage.local.get('mockStoreId').then((data) => {
-    currentStoreId = String(data.mockStoreId ?? 'store-1')
+  void resolveStoreId().then((id) => {
+    currentStoreId = id
   })
 
   void loadInventoryUiState().then((state) => {
@@ -500,55 +515,55 @@ export const renderInventory: ViewRender = (root) => {
       const size = String(fd.get('size') ?? '').trim()
       const color = String(fd.get('color') ?? '').trim()
 
-      const dupRes = await sendToContent({
-        type: MSG.INVENTORY_CHECK_DUPLICATE,
-        styleId: source.style,
-        size,
-        color,
-      })
-      if (dupRes.search?.duplicateWarning) {
-        showDuplicateModal(dupRes.search.duplicateWarning)
-        return
-      }
-
-      const res = await sendToContent({
-        type: MSG.INVENTORY_CREATE_VARIANT,
-        payload: {
-          styleId: source.style,
+      try {
+        const storeId = await resolveStoreId()
+        const duplicateWarning = await checkDuplicateVariant(
+          source.style,
           size,
           color,
-          sourceItemNumber: source.itemNumber,
-        },
-      })
-
-      if (!res.ok || !res.variant) {
-        statusEl.textContent = res.error ?? 'Failed'
-        statusEl.className = 'status error'
-        return
-      }
-
-      if (!res.variant.ok) {
-        showDuplicateModal(res.variant.message)
-        return
-      }
-
-      close()
-      statusEl.textContent = res.variant.message
-      statusEl.className = 'status success'
-
-      if (res.variant.saleSearchQuery && getPanelContext()?.screen === 'order') {
-        const apply = await sendToContent({
-          type: MSG.APPLY_ITEM_TO_ORDER,
-          saleSearchQuery: res.variant.saleSearchQuery,
-        })
-        if (apply.ok) {
-          statusEl.textContent += apply.autoSelected
-            ? ` Added ${res.variant.saleSearchQuery} to the order.`
-            : ` Sale search: ${res.variant.saleSearchQuery} — pick from dropdown if needed.`
+          storeId,
+        )
+        if (duplicateWarning) {
+          showDuplicateModal(duplicateWarning)
+          return
         }
-      }
 
-      searchForm.requestSubmit()
+        const variant = await createVariant(
+          {
+            styleId: source.style,
+            size,
+            color,
+            sourceItemNumber: source.itemNumber,
+          },
+          storeId,
+        )
+
+        if (!variant.ok) {
+          showDuplicateModal(variant.message)
+          return
+        }
+
+        close()
+        statusEl.textContent = variant.message
+        statusEl.className = 'status success'
+
+        if (variant.saleSearchQuery && getPanelContext()?.screen === 'order') {
+          const apply = await sendToContent({
+            type: MSG.APPLY_ITEM_TO_ORDER,
+            saleSearchQuery: variant.saleSearchQuery,
+          })
+          if (apply.ok) {
+            statusEl.textContent += apply.autoSelected
+              ? ` Added ${variant.saleSearchQuery} to the order.`
+              : ` Sale search: ${variant.saleSearchQuery} — pick from dropdown if needed.`
+          }
+        }
+
+        searchForm.requestSubmit()
+      } catch (err) {
+        statusEl.textContent = err instanceof Error ? err.message : 'Failed to create variant'
+        statusEl.className = 'status error'
+      }
     })
   }
 
@@ -591,14 +606,23 @@ export const renderInventory: ViewRender = (root) => {
   }
 
   async function loadCatalogBrowse(): Promise<void> {
-    const res = await sendToContent({ type: MSG.INVENTORY_LIST_CATALOG })
-    if (res.ok && res.catalogItems?.length) {
-      catalogItems = res.catalogItems
-      browsePage = 1
-      renderBrowseList()
-    } else {
-      const tableWrap = section.querySelector('#blh-inv-browse-table') as HTMLElement
-      tableWrap.innerHTML = `<p class="error inv-browse-empty">${esc(res.error ?? 'Could not load catalog')}</p>`
+    const tableWrap = section.querySelector('#blh-inv-browse-table') as HTMLElement
+    try {
+      const storeId = await resolveStoreId()
+      currentStoreId = storeId
+      const items = await listCatalogItems(storeId)
+      if (items.length) {
+        catalogItems = items
+        browsePage = 1
+        renderBrowseList()
+      } else {
+        tableWrap.innerHTML =
+          '<p class="muted inv-browse-empty">No inventory returned for this location. Check API credentials and environment (QA vs Production).</p>'
+      }
+    } catch (err) {
+      tableWrap.innerHTML = `<p class="error inv-browse-empty">${esc(
+        err instanceof Error ? err.message : 'Could not load catalog',
+      )}</p>`
     }
   }
 
@@ -682,8 +706,7 @@ export const renderInventory: ViewRender = (root) => {
 
   searchForm.addEventListener('submit', async (e) => {
     e.preventDefault()
-    const stored = await chrome.storage.local.get('mockStoreId')
-    currentStoreId = String(stored.mockStoreId ?? 'store-1')
+    currentStoreId = await resolveStoreId()
 
     const query = readSearchQuery(searchForm)
     statusEl.textContent = ''
@@ -700,30 +723,28 @@ export const renderInventory: ViewRender = (root) => {
     setBrowseVisible(false)
     clearSearchResults()
 
-    const res = await sendToContent({
-      type: MSG.INVENTORY_SEARCH,
-      query,
-    })
+    try {
+      const search = await searchInventory(query, currentStoreId)
 
-    if (!res.ok || !res.search) {
+      if (search.duplicateWarning) {
+        showDuplicateModal(search.duplicateWarning)
+      }
+
+      if (search.items.length === 0) {
+        searchItems = []
+        resultsEl.innerHTML =
+          '<p class="muted">No matches. Try another location, department, name, vendor item name, or item #.</p>'
+        return
+      }
+
+      searchItems = search.items
+      renderInventoryTable(resultsEl, sortItems(searchItems, sortKey, sortDir), 'search')
+    } catch (err) {
       searchItems = []
-      resultsEl.innerHTML = `<p class="error">${esc(res.error ?? 'Search failed')}</p>`
-      return
+      resultsEl.innerHTML = `<p class="error">${esc(
+        err instanceof Error ? err.message : 'Search failed',
+      )}</p>`
     }
-
-    if (res.search.duplicateWarning) {
-      showDuplicateModal(res.search.duplicateWarning)
-    }
-
-    if (res.search.items.length === 0) {
-      searchItems = []
-      resultsEl.innerHTML =
-        '<p class="muted">No matches. Try another location, department, name, vendor item name, or item #.</p>'
-      return
-    }
-
-    searchItems = res.search.items
-    renderInventoryTable(resultsEl, sortItems(searchItems, sortKey, sortDir), 'search')
   })
 
   section.querySelector('#blh-inv-page-prev')?.addEventListener('click', () => {

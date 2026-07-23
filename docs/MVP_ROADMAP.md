@@ -58,19 +58,22 @@ Prerequisites from client: **Elite plan**, API access approved, Retailer ID + AP
 | Step | Work |
 |------|------|
 | 1 | Implement `bridallive-inventory-provider.ts` (`apiLogin`, token refresh, search + create endpoints from Swagger) |
-| 2 | Store credentials in `chrome.storage` or proxy via Render |
-| 3 | Set `getInventoryProvider()` to use BridalLive when configured |
+| 2 | Store credentials in `chrome.storage` (Settings UI) |
+| 3 | Runtime provider selects BridalLive when credentials are configured |
 | 4 | Map API models → `InventoryItem` / duplicate rules |
 | 5 | Labels provider → BL print or PDF endpoints |
 | 6 | Remove or gate mock provider in production builds |
 
-**Files to touch in Phase 2 (not the panel views):**
+**Status:** Steps 1–4 implemented for inventory. Labels still mock/DOM. Add-to-order still uses the open BridalLive tab.
+
+**Files:**
 
 - `src/inventory/bridallive-inventory-provider.ts`
 - `src/inventory/provider.ts`
-- `src/lib/bridallive-auth.ts` (new)
-- `src/api/client.ts` (labels/auth if needed)
-- `manifest.config.ts` (host permission for API base URL)
+- `src/lib/bridallive-auth.ts`
+- `src/lib/bridallive-item-map.ts`
+- `src/lib/bridallive-credentials.ts`
+- `manifest.config.ts` (host permission for `*.bridallive.com`)
 
 ## MVP demo script (5 minutes)
 

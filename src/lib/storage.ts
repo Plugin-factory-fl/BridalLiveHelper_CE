@@ -1,7 +1,9 @@
 import {
+  FONT_SIZE_OPTIONS,
   PANEL_DEFAULT_WIDTH,
   STORAGE_KEYS,
   type ActiveView,
+  type FontSizePreference,
 } from './config'
 
 export type StoredPreferences = {
@@ -10,6 +12,7 @@ export type StoredPreferences = {
   activeView: ActiveView
   mockStoreId: string
   devScreenOverride: string | null
+  fontSize: FontSizePreference
 }
 
 const DEFAULTS: StoredPreferences = {
@@ -18,6 +21,17 @@ const DEFAULTS: StoredPreferences = {
   activeView: 'home',
   mockStoreId: 'store-1',
   devScreenOverride: null,
+  fontSize: 'small',
+}
+
+function parseFontSize(value: unknown): FontSizePreference {
+  return FONT_SIZE_OPTIONS.includes(value as FontSizePreference)
+    ? (value as FontSizePreference)
+    : DEFAULTS.fontSize
+}
+
+export function applyFontSizePreference(fontSize: FontSizePreference): void {
+  document.documentElement.dataset.fontSize = fontSize
 }
 
 export async function loadPreferences(): Promise<StoredPreferences> {
@@ -28,6 +42,7 @@ export async function loadPreferences(): Promise<StoredPreferences> {
     activeView: (data[STORAGE_KEYS.activeView] as ActiveView) ?? DEFAULTS.activeView,
     mockStoreId: String(data[STORAGE_KEYS.mockStoreId] ?? DEFAULTS.mockStoreId),
     devScreenOverride: data[STORAGE_KEYS.devScreenOverride] ?? null,
+    fontSize: parseFontSize(data[STORAGE_KEYS.fontSize]),
   }
 }
 
@@ -41,6 +56,9 @@ export async function savePreferences(
   if (patch.mockStoreId !== undefined) next[STORAGE_KEYS.mockStoreId] = patch.mockStoreId
   if (patch.devScreenOverride !== undefined) {
     next[STORAGE_KEYS.devScreenOverride] = patch.devScreenOverride
+  }
+  if (patch.fontSize !== undefined) {
+    next[STORAGE_KEYS.fontSize] = parseFontSize(patch.fontSize)
   }
   await chrome.storage.local.set(next)
   return loadPreferences()

@@ -7,6 +7,7 @@ import {
 } from '../inventory/service'
 import { applySaleSearchToOrder } from './order-context'
 import { MSG, type ExtensionMessage, type ExtensionResponse } from '../lib/messages'
+import { getActiveBridalLiveCredentials } from '../lib/bridallive-credentials'
 import { loadPreferences } from '../lib/storage'
 import { detectContext, parseDevScreenOverride } from './context'
 
@@ -33,6 +34,13 @@ export function initBridge(): void {
   })
 }
 
+async function resolveStoreId(): Promise<string> {
+  const prefs = await loadPreferences()
+  if (prefs.mockStoreId) return prefs.mockStoreId
+  const creds = await getActiveBridalLiveCredentials()
+  return creds?.location.id ?? 'store-1'
+}
+
 async function handleMessage(message: ExtensionMessage): Promise<ExtensionResponse> {
   switch (message.type) {
     case MSG.PANEL_READY:
@@ -52,26 +60,42 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
       }
 
     case MSG.INVENTORY_SEARCH: {
-      const prefs = await loadPreferences()
-      const search = await searchInventory(message.query, prefs.mockStoreId)
-      return { ok: true, search }
+      try {
+        const search = await searchInventory(message.query, await resolveStoreId())
+        return { ok: true, search }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'Search failed' }
+      }
     }
 
     case MSG.INVENTORY_LIST_CATALOG: {
-      const prefs = await loadPreferences()
-      const catalogItems = await listCatalogItems(prefs.mockStoreId)
-      return { ok: true, catalogItems }
+      try {
+        const catalogItems = await listCatalogItems(await resolveStoreId())
+        return { ok: true, catalogItems }
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : 'Could not load catalog',
+        }
+      }
     }
 
     case MSG.INVENTORY_CHECK_DUPLICATE: {
-      const prefs = await loadPreferences()
-      const duplicateWarning = await checkDuplicateVariant(
-        message.styleId,
-        message.size,
-        message.color,
-        prefs.mockStoreId,
-      )
-      return { ok: true, search: { items: [], duplicateWarning } }
+      try {
+        const storeId = await resolveStoreId()
+        const duplicateWarning = await checkDuplicateVariant(
+          message.styleId,
+          message.size,
+          message.color,
+          storeId,
+        )
+        return { ok: true, search: { items: [], duplicateWarning } }
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : 'Duplicate check failed',
+        }
+      }
     }
 
     case MSG.APPLY_ITEM_TO_ORDER: {
@@ -82,28 +106,32 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
     }
 
     case MSG.INVENTORY_CREATE_VARIANT: {
-      const prefs = await loadPreferences()
-      const variant = await createVariant(
-        {
-          styleId: message.payload.styleId,
-          size: message.payload.size,
-          color: message.payload.color,
-          sourceItemNumber: message.payload.sourceItemNumber,
-        },
-        prefs.mockStoreId,
-      )
-      return { ok: true, variant }
+      try {
+        const variant = await createVariant(
+          {
+            styleId: message.payload.styleId,
+            size: message.payload.size,
+            color: message.payload.color,
+            sourceItemNumber: message.payload.sourceItemNumber,
+          },
+          await resolveStoreId(),
+        )
+        return { ok: true, variant }
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : 'Create variant failed',
+        }
+      }
     }
 
     case MSG.LABELS_GET_RECEIVING_LINES: {
-      const prefs = await loadPreferences()
-      const receivingLines = await getReceivingLines(prefs.mockStoreId)
+      const receivingLines = await getReceivingLines(await resolveStoreId())
       return { ok: true, receivingLines }
     }
 
     case MSG.LABELS_LIST_TEMPLATES: {
-      const prefs = await loadPreferences()
-      const labelTemplates = await listLabelTemplates(prefs.mockStoreId)
+      const labelTemplates = await listLabelTemplates(await resolveStoreId())
       return { ok: true, labelTemplates }
     }
 
