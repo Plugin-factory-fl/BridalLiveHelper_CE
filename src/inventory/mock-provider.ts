@@ -81,6 +81,13 @@ async function search(query: InventorySearchQuery): Promise<InventorySearchResul
 async function createVariant(
   payload: InventoryCreateVariantPayload,
 ): Promise<InventoryCreateVariantResult> {
+  if (!payload.vendorItemName?.trim()) {
+    return {
+      ok: false,
+      message: 'Vendor item name is required.',
+    }
+  }
+
   const exists = MOCK_ITEMS.some(
     (i) =>
       i.style.toLowerCase() === payload.styleId.toLowerCase() &&
@@ -112,7 +119,7 @@ async function createVariant(
     id: `mock-${Date.now()}`,
     itemNumber,
     style: payload.styleId,
-    vendorItemName: source?.vendorItemName ?? payload.styleId,
+    vendorItemName: payload.vendorItemName.trim() || source?.vendorItemName || payload.styleId,
     vendor,
     saleSearchQuery: buildSaleSearchQuery(vendor, itemNumber),
     department: source?.department ?? 'Dress',

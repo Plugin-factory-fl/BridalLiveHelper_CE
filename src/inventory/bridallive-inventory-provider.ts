@@ -190,8 +190,31 @@ async function findSourceItem(
   sourceItemNumber: string | undefined,
   styleId: string,
   storeId: string,
+  options?: {
+    sourceInventoryItemId?: string
+    sourceLocationId?: string
+  },
 ): Promise<{ item: BridalLiveItem; location: BridalLiveLocationCredentials } | null> {
-  const locations = await locationsToSearch(undefined, storeId)
+  const preferredLocationId = options?.sourceLocationId?.trim()
+  const locations = preferredLocationId
+    ? await locationsToSearch(preferredLocationId, storeId)
+    : await locationsToSearch(undefined, storeId)
+
+  const inventoryItemId = options?.sourceInventoryItemId?.trim()
+  if (inventoryItemId && /^\d+$/.test(inventoryItemId)) {
+    for (const location of locations) {
+      try {
+        const item = await bridalLiveFetch<BridalLiveItem>(`/api/items/${inventoryItemId}`, {
+          method: 'GET',
+          storeId: location.id,
+        })
+        if (item?.id != null) return { item, location }
+      } catch {
+        /* try next location / fall through to list */
+      }
+    }
+  }
+
   for (const location of locations) {
     const filter: BridalLiveItem = {}
     if (sourceItemNumber) {
@@ -218,7 +241,18 @@ async function findSourceItem(
       (sourceItemNumber
         ? data?.result?.find((row) => formatItemNumber(row) === sourceItemNumber.trim())
         : data?.result?.[0]) ?? null
-    if (match) return { item: match, location }
+    if (!match?.id) continue
+
+    // List rows can be sparse — load the full item before cloning.
+    try {
+      const full = await bridalLiveFetch<BridalLiveItem>(`/api/items/${match.id}`, {
+        method: 'GET',
+        storeId: location.id,
+      })
+      if (full?.id != null) return { item: full, location }
+    } catch {
+      return { item: match, location }
+    }
   }
   return null
 }
@@ -240,17 +274,28 @@ async function createVariant(
   const styleId = payload.styleId.trim()
   const size = payload.size.trim()
   const color = payload.color.trim()
+  const vendorItemName = payload.vendorItemName.trim()
   if (!styleId || !size || !color) {
     return { ok: false, message: 'Style, size, and color are required.' }
   }
+  if (!vendorItemName) {
+    return {
+      ok: false,
+      message:
+        'Vendor item name is required. Enter the manufacturer / vendor style name so BridalLive can find this item.',
+    }
+  }
 
-  const source = await findSourceItem(payload.sourceItemNumber, styleId, storeId)
+  const source = await findSourceItem(payload.sourceItemNumber, styleId, storeId, {
+    sourceInventoryItemId: payload.sourceInventoryItemId,
+    sourceLocationId: payload.sourceLocationId,
+  })
   if (!source) {
     return {
       ok: false,
       message: payload.sourceItemNumber
         ? `Could not find source item ${payload.sourceItemNumber} in BridalLive.`
-        : `Could not find a source item for style ${styleId}. Use “Use as source” on an existing row first.`,
+        : `Could not find a source item for style ${styleId}. Use “+” on an existing inventory row first.`,
     }
   }
 
@@ -278,8 +323,10 @@ async function createVariant(
     return { ok: false, message: `No API credentials for ${source.location.name}.` }
   }
 
-  const body = buildVariantCreateBody(source.item, size, color)
-  body.name = styleId
+  const body = buildVariantCreateBody(source.item, size, color, {
+    name: styleId,
+    vendorItemName,
+  })
 
   const created = await bridalLiveFetch<BridalLiveItem>('/api/items', {
     method: 'POST',
@@ -287,7 +334,20 @@ async function createVariant(
     body: JSON.stringify(body),
   })
 
-  if (!created || (created.id == null && !formatItemNumber(created))) {
+  // Prefer a fresh GET so we confirm the item actually exists and is searchable.
+  let persisted: BridalLiveItem | null = created ?? null
+  if (created?.id != null) {
+    try {
+      persisted = await bridalLiveFetch<BridalLiveItem>(`/api/items/${created.id}`, {
+        method: 'GET',
+        storeId: source.location.id,
+      })
+    } catch {
+      persisted = created
+    }
+  }
+
+  if (!persisted || (persisted.id == null && !formatItemNumber(persisted))) {
     return {
       ok: false,
       message:
@@ -295,8 +355,8 @@ async function createVariant(
     }
   }
 
-  const mapped = mapBridalLiveItem(created, source.location)
-  const itemNumber = mapped.itemNumber || formatItemNumber(created)
+  const mapped = mapBridalLiveItem(persisted, source.location)
+  const itemNumber = mapped.itemNumber || formatItemNumber(persisted)
   if (!itemNumber) {
     return {
       ok: false,
@@ -305,11 +365,34 @@ async function createVariant(
     }
   }
 
+  // Confirm list search can see it (same path staff use in the Helper).
+  try {
+    const verify = await search(
+      { itemNumber, locationId: source.location.id },
+      source.location.id,
+    )
+    const found = verify.items.some((i) => i.itemNumber === itemNumber)
+    if (!found) {
+      return {
+        ok: true,
+        itemNumber,
+        saleSearchQuery: mapped.saleSearchQuery || itemNumber,
+        message:
+          `Variant created as ${itemNumber} at ${source.location.name}, but it is not yet visible in item search. ` +
+          `Open BridalLive Items, search item #${itemNumber}, and confirm Vendor Item Name is “${vendorItemName}”.`,
+      }
+    }
+  } catch {
+    /* non-fatal — create already succeeded */
+  }
+
   return {
     ok: true,
     itemNumber,
     saleSearchQuery: mapped.saleSearchQuery || itemNumber,
-    message: `Variant created in BridalLive: ${itemNumber}. Use ⊕ Add to order if you want it on the open sale.`,
+    message:
+      `Variant created in BridalLive: ${itemNumber} at ${source.location.name}` +
+      ` (vendor item name: ${vendorItemName}). Use ⊕ Add to order if you want it on the open sale.`,
   }
 }
 

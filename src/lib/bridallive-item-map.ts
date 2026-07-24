@@ -106,6 +106,7 @@ export function buildVariantCreateBody(
   source: BridalLiveItem,
   size: string,
   color: string,
+  options?: { vendorItemName?: string; name?: string },
 ): BridalLiveItem {
   const omit = new Set([
     'id',
@@ -134,6 +135,10 @@ export function buildVariantCreateBody(
     'qbSyncStatus',
     'tokenRetailerId',
     'trxId',
+    // Do not copy media / upload leftovers onto a new SKU.
+    'itemPictureImageUrl',
+    'itemPictureId',
+    'imageUrl',
   ])
 
   const body: BridalLiveItem = {}
@@ -143,12 +148,22 @@ export function buildVariantCreateBody(
     body[key] = value
   }
 
+  const vendorItemName = (options?.vendorItemName ?? source.vendorItemName ?? '').trim()
+  const name = (options?.name ?? source.name ?? '').trim()
+
   body.size = size
   body.sizeString = size
   body.color = color
   body.colorString = color
   body.quantityOnHand = 0
-  body.inventoryItem = source.inventoryItem ?? true
+  body.inventoryItem = true
+  body.nonInventoryItem = false
+  if (name) body.name = name
+  if (vendorItemName) body.vendorItemName = vendorItemName
+  // New variants should appear in normal inventory searches.
+  if (!body.status || String(body.status).trim() === '') {
+    body.status = 'Active'
+  }
 
   return body
 }

@@ -84,7 +84,15 @@ function prefillSearchFromOrder(form: HTMLFormElement, ctx: BridalLiveContext): 
 
 type SourceItem = Pick<
   InventoryItem,
-  'itemNumber' | 'style' | 'vendor' | 'department' | 'size' | 'color'
+  | 'id'
+  | 'itemNumber'
+  | 'style'
+  | 'vendor'
+  | 'vendorItemName'
+  | 'department'
+  | 'size'
+  | 'color'
+  | 'locationId'
 >
 
 const BROWSE_PAGE_SIZE_DEFAULT: InventoryBrowsePageSize = 10
@@ -559,12 +567,15 @@ export const renderInventory: ViewRender = (root) => {
     return `
       <tr
         class="inv-item-row"
+        data-id="${esc(item.id)}"
         data-item="${esc(item.itemNumber)}"
         data-style="${esc(item.style)}"
         data-vendor="${esc(item.vendor)}"
+        data-vendor-item-name="${esc(item.vendorItemName)}"
         data-department="${esc(item.department)}"
         data-size="${esc(item.size)}"
         data-color="${esc(item.color)}"
+        data-location-id="${esc(item.locationId)}"
         data-sale-query="${esc(item.saleSearchQuery)}"
       >
         ${cols.map((id) => cellForColumn(item, id)).join('')}
@@ -661,6 +672,16 @@ export const renderInventory: ViewRender = (root) => {
           </p>
         </div>
         <form id="blh-variant-modal-form" class="form-grid">
+          <label>Vendor item name
+            <input
+              name="vendorItemName"
+              type="text"
+              required
+              value="${esc(source.vendorItemName)}"
+              placeholder="Manufacturer / vendor style name"
+              autocomplete="off"
+            />
+          </label>
           <label>New size <input name="size" type="text" required placeholder="e.g. 14" autocomplete="off" /></label>
           <label>New color <input name="color" type="text" required placeholder="e.g. Ivory" autocomplete="off" /></label>
           <div class="blh-modal-actions blh-modal-actions--form">
@@ -679,14 +700,25 @@ export const renderInventory: ViewRender = (root) => {
     })
 
     const form = overlay.querySelector('#blh-variant-modal-form') as HTMLFormElement
+    const sizeInput = form.elements.namedItem('size') as HTMLInputElement | null
+    sizeInput?.focus()
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault()
       const fd = new FormData(form)
       const size = String(fd.get('size') ?? '').trim()
       const color = String(fd.get('color') ?? '').trim()
+      const vendorItemName = String(fd.get('vendorItemName') ?? '').trim()
       const submitBtn = form.querySelector(
         'button[type="submit"]',
       ) as HTMLButtonElement | null
+
+      if (!vendorItemName) {
+        showDuplicateModal(
+          'Vendor item name is required. Enter the manufacturer / vendor style name (do not leave it blank).',
+        )
+        return
+      }
 
       if (
         size.toLowerCase() === source.size.trim().toLowerCase() &&
@@ -717,7 +749,10 @@ export const renderInventory: ViewRender = (root) => {
             styleId: source.style,
             size,
             color,
+            vendorItemName,
             sourceItemNumber: source.itemNumber,
+            sourceInventoryItemId: source.id,
+            sourceLocationId: source.locationId,
           },
           storeId,
         )
@@ -731,11 +766,36 @@ export const renderInventory: ViewRender = (root) => {
         const itemLabel = variant.itemNumber ? `item #${variant.itemNumber}` : 'a new item'
         const successMsg =
           `Variant created in BridalLive as ${itemLabel}` +
-          ` (${size} / ${color}) for ${source.style}.` +
+          ` (${size} / ${color}) for ${source.style}` +
+          ` · vendor item name “${vendorItemName}”.` +
           ` Use ⊕ Add to order if you want it on the open sale.`
 
         showVariantCreatedModal(successMsg)
         setInventoryStatus(successMsg, 'success')
+
+        // Look up the new item # so it appears even if prior filters wouldn't match.
+        if (variant.itemNumber) {
+          const itemNumberInput = searchForm.elements.namedItem(
+            'itemNumber',
+          ) as HTMLInputElement | null
+          const locationSelect = searchForm.elements.namedItem(
+            'locationId',
+          ) as HTMLSelectElement | null
+          if (itemNumberInput) itemNumberInput.value = variant.itemNumber
+          if (locationSelect && source.locationId) {
+            locationSelect.value = source.locationId
+          }
+          // Clear competing filters that could hide the new row.
+          for (const name of ['name', 'vendorItemName', 'vendor', 'size', 'color', 'department']) {
+            const el = searchForm.elements.namedItem(name) as
+              | HTMLInputElement
+              | HTMLSelectElement
+              | null
+            if (el) el.value = ''
+          }
+          wireFieldClearButtons(searchForm)
+        }
+
         await runInventoryQuery({
           keepStatus: { message: successMsg, kind: 'success' },
         })
@@ -752,12 +812,15 @@ export const renderInventory: ViewRender = (root) => {
 
   function itemRowDataset(el: HTMLElement): SourceItem {
     return {
+      id: el.dataset.id ?? '',
       itemNumber: el.dataset.item ?? '',
       style: el.dataset.style ?? '',
       vendor: el.dataset.vendor ?? '',
+      vendorItemName: el.dataset.vendorItemName ?? '',
       department: el.dataset.department ?? '',
       size: el.dataset.size ?? '',
       color: el.dataset.color ?? '',
+      locationId: el.dataset.locationId ?? '',
     }
   }
 

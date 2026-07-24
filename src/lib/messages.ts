@@ -33,7 +33,10 @@ export type InventoryCreateVariantPayload = {
   styleId: string
   size: string
   color: string
+  vendorItemName: string
   sourceItemNumber?: string
+  sourceInventoryItemId?: string
+  sourceLocationId?: string
 }
 
 export type InventoryCreateVariantResponse = {

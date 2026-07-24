@@ -151,7 +151,10 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
             styleId: message.payload.styleId,
             size: message.payload.size,
             color: message.payload.color,
+            vendorItemName: message.payload.vendorItemName,
             sourceItemNumber: message.payload.sourceItemNumber,
+            sourceInventoryItemId: message.payload.sourceInventoryItemId,
+            sourceLocationId: message.payload.sourceLocationId,
           },
           await resolveStoreId(),
         )
