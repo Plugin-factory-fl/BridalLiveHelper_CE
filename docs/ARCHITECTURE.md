@@ -29,3 +29,5 @@ Nothing in the Helper is meant to replace BridalLive. It is a workstation beside
 ## Install notes
 
 Load the unpacked extension from the `dist/` folder after a build. Details are in [Set up the Helper](./SETUP.md).
+
+The product destination (backend, login, per-shop inventory, private Chrome Web Store) is [Phase 3](./PHASE_3.md).

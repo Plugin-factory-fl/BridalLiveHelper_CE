@@ -16,7 +16,7 @@ First-time install: see [Set up the Helper](docs/SETUP.md).
 ## What you can do
 
 - **Inventory** — Search every connected location. Add another size or color from an existing item. On a sale, add a found item to the open order.
-- **Labels** — Print Avery 5160 labels from a receiving voucher, or reprint one item. Choose where to start on a partially used sheet.
+- **Labels** — Print Avery 5160 labels from a receiving voucher, a spreadsheet (Mass Labeling), or reprint one item.
 - **Settings** — Connect each boutique, pick text size, and choose which inventory columns you see.
 
 Until a store is connected in Settings, Inventory uses a sample catalog so you can still learn the screens.
@@ -27,3 +27,4 @@ Until a store is connected in Settings, Inventory uses a sample catalog so you c
 - [Using Inventory](docs/INVENTORY_PILLAR.md)
 - [Printing labels](docs/BRIDALLIVE_CONTEXT.md)
 - [How it works](docs/ARCHITECTURE.md)
+- [Phase 3 — complete product](docs/PHASE_3.md) — destination: backend, login, per-shop inventory, private Chrome Web Store

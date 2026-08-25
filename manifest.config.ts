@@ -27,7 +27,11 @@ export default defineManifest({
     type: 'module',
   },
   permissions: ['storage', 'tabs', 'sidePanel'],
-  host_permissions: ['https://app.bridallive.com/*', 'https://*.bridallive.com/*'],
+  host_permissions: [
+    'https://app.bridallive.com/*',
+    'https://*.bridallive.com/*',
+    'http://localhost:8787/*',
+  ],
   content_scripts: [
     {
       matches: ['https://app.bridallive.com/*', 'https://*.bridallive.com/*'],

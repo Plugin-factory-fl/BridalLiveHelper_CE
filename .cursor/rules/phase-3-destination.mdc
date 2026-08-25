@@ -1,0 +1,17 @@
+---
+description: Phase 3 is the product destination — complete Helper with backend, Home login, location picker, and private Chrome Web Store.
+alwaysApply: true
+---
+
+# Phase 3 destination
+
+BridalLive Helper’s finish line is **Phase 3**: a fully working product The Chic Boutique uses with BridalLive every day.
+
+Read [docs/PHASE_3.md](docs/PHASE_3.md). Staff model:
+
+- **Login is on the Home tab** — employees sign in there
+- **Pick / switch working location** (White Plains or Poughkeepsie); Settings is a location picker, not a place to paste keys
+- **Backend holds BridalLive Retailer IDs and API keys** per location
+- Private Chrome Web Store listing for how the shop installs the product
+
+Do not treat unpacked local loads, Settings API-key paste, or missing login as the end state.

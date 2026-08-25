@@ -26,6 +26,7 @@ import {
 } from '../../lib/inventory-ui-state'
 import { sendToContent } from '../bridge-client'
 import type { ViewRender } from '../router'
+import { setWorkingLocation } from '../../lib/helper-session'
 
 function locationFieldsHtml(loc: BridalLiveLocationCredentials): string {
   const prefix = `bl-loc-${loc.id}`
@@ -85,7 +86,7 @@ export const renderSettings: ViewRender = (root) => {
     <h2 class="view-title">Settings</h2>
     <p class="data-source-badge" id="blh-data-source"></p>
     <p class="muted small">
-      Connect each boutique so search, new sizes, receiving vouchers, and label reprints use live BridalLive inventory.
+      Pick the boutique you are working at. Inventory and labels follow that location.
       Adding an item to a sale still uses the BridalLive tab you have open.
     </p>
     <form id="blh-settings-form" class="form-stack">
@@ -96,19 +97,16 @@ export const renderSettings: ViewRender = (root) => {
           <option value="large">Large</option>
         </select>
       </label>
-      <label>Default location
-        <select name="mockStoreId" id="blh-store-select"></select>
-      </label>
       <fieldset class="fieldset" id="blh-inv-columns">
         <legend>Inventory columns</legend>
         <p class="muted small">Choose which columns appear in search results. Drag a column edge in the table to resize.</p>
         <div class="inv-column-toggles" id="blh-inv-column-toggles"></div>
       </fieldset>
       <fieldset class="fieldset" id="blh-api-credentials">
-        <legend>Connect your stores</legend>
+        <legend>Working location</legend>
         <p class="muted small">
-          Keys stay in this Chrome profile only. Each location needs its own Retailer ID and API key from BridalLive
-          <strong>Settings → Account → API</strong>. Use <strong>Live store</strong> for real inventory.
+          Sign in on Home. Then pick White Plains or Poughkeepsie here (or on Home). The Helper server holds each
+          location’s BridalLive ID and API key.
         </p>
         <p class="bl-api-status muted small" id="blh-api-status" role="status"></p>
         <label>Store data
@@ -117,23 +115,30 @@ export const renderSettings: ViewRender = (root) => {
             <option value="production">Live store</option>
           </select>
         </label>
-        <label>Active location
+        <label>Working location
           <select name="blApiActiveLocationId" id="blh-api-active-location">
             <option value="poughkeepsie">Poughkeepsie</option>
             <option value="white-plains">White Plains</option>
           </select>
         </label>
-        <div id="blh-api-locations" class="bl-api-locations"></div>
-        <div class="btn-row">
-          <button type="button" class="btn btn-secondary btn-sm" id="blh-api-test">
-            Test connection
-          </button>
-          <button type="button" class="btn btn-ghost btn-sm" id="blh-api-clear">
-            Disconnect stores
-          </button>
-        </div>
+        <details class="practice-options" id="blh-api-keys-dev">
+          <summary>Developer: BridalLive keys (until the server holds them)</summary>
+          <p class="muted small">
+            Staff should not need these. Until the Helper server is live, paste keys from BridalLive
+            <strong>Settings → Account → API</strong>.
+          </p>
+          <div id="blh-api-locations" class="bl-api-locations"></div>
+          <div class="btn-row">
+            <button type="button" class="btn btn-secondary btn-sm" id="blh-api-test">
+              Test connection
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" id="blh-api-clear">
+              Disconnect stores
+            </button>
+          </div>
+        </details>
       </fieldset>
-      <details class="practice-options">
+      <details class="practice-options" id="blh-practice-options">
         <summary>Practice options</summary>
         <p class="muted small">
           Use this only for training, when you want Home and banners to treat BridalLive as a different screen.
@@ -163,7 +168,6 @@ export const renderSettings: ViewRender = (root) => {
   const apiActiveSelect = section.querySelector(
     '#blh-api-active-location',
   ) as HTMLSelectElement
-  const storeSelect = section.querySelector('#blh-store-select') as HTMLSelectElement
   const fontSizeSelect = section.querySelector('#blh-font-size') as HTMLSelectElement
   const status = section.querySelector('#blh-settings-status') as HTMLElement
 
@@ -174,14 +178,14 @@ export const renderSettings: ViewRender = (root) => {
   const refreshStoreSelect = async (preferredId?: string) => {
     const stores = await listStores()
     const prefs = await loadPreferences()
-    const selected = preferredId || prefs.mockStoreId
-    storeSelect.innerHTML = stores
-      .map((s) => `<option value="${s.id}">${s.name}</option>`)
-      .join('')
-    if (stores.some((s) => s.id === selected)) {
-      storeSelect.value = selected
-    } else if (stores[0]) {
-      storeSelect.value = stores[0].id
+    const selected = preferredId || prefs.mockStoreId || apiActiveSelect.value
+    if (stores.length > 0) {
+      apiActiveSelect.innerHTML = stores
+        .map((s) => `<option value="${s.id}">${s.name}</option>`)
+        .join('')
+    }
+    if (Array.from(apiActiveSelect.options).some((o) => o.value === selected)) {
+      apiActiveSelect.value = selected
     }
   }
 
@@ -198,7 +202,7 @@ export const renderSettings: ViewRender = (root) => {
     const dev = section.querySelector('#blh-dev-screen') as HTMLSelectElement
     dev.value = prefs.devScreenOverride ?? ''
     fontSizeSelect.value = prefs.fontSize
-    const practice = section.querySelector('.practice-options') as HTMLDetailsElement | null
+    const practice = section.querySelector('#blh-practice-options') as HTMLDetailsElement | null
     if (practice && prefs.devScreenOverride) practice.open = true
   })
 
@@ -219,6 +223,12 @@ export const renderSettings: ViewRender = (root) => {
   void loadBridalLiveApiSettings().then(applyApiSettingsToForm)
 
   const form = section.querySelector('#blh-settings-form') as HTMLFormElement
+
+  apiActiveSelect.addEventListener('change', () => {
+    void setWorkingLocation(apiActiveSelect.value).catch(() => {
+      /* session optional until the Helper server is live */
+    })
+  })
 
   section.querySelector('#blh-api-test')?.addEventListener('click', async () => {
     status.textContent = 'Testing connection…'
@@ -285,10 +295,7 @@ export const renderSettings: ViewRender = (root) => {
     const activeConfigured = apiSettings.locations.find(
       (l) => l.id === apiSettings.activeLocationId && isLocationConfigured(l),
     )
-    const storeId =
-      activeConfigured?.id ||
-      String(fd.get('mockStoreId') ?? '') ||
-      apiSettings.activeLocationId
+    const storeId = apiSettings.activeLocationId
 
     await savePreferences({
       mockStoreId: storeId,

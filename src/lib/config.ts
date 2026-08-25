@@ -80,6 +80,8 @@ export const STORAGE_KEYS = {
   helperPrintPdfBytes: 'helperPrintPdfBytes',
   /** Phase 2: per-location Retailer ID + API key (chrome.storage.local). */
   bridalLiveApiSettings: 'bridalLiveApiSettings',
+  /** Phase 3: Helper employee session (token + working location). */
+  helperSession: 'helperSession',
 } as const
 
 export type PrintPreviewSession = {
