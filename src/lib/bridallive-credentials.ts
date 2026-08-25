@@ -22,7 +22,7 @@ export const DEFAULT_BRIDALLIVE_LOCATIONS: BridalLiveLocationCredentials[] = [
 ]
 
 export const DEFAULT_BRIDALLIVE_API_SETTINGS: BridalLiveApiSettings = {
-  environment: 'qa',
+  environment: 'production',
   activeLocationId: 'poughkeepsie',
   locations: DEFAULT_BRIDALLIVE_LOCATIONS.map((loc) => ({ ...loc })),
 }
@@ -94,7 +94,7 @@ export function getActiveLocation(
   )
 }
 
-/** Credentials for the selected location — ready for Phase 2 `apiLogin`. */
+/** Live keys for the selected boutique, when the Helper server still sends them. */
 export async function getActiveBridalLiveCredentials(): Promise<{
   environment: BridalLiveApiEnvironment
   location: BridalLiveLocationCredentials

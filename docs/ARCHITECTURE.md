@@ -13,21 +13,25 @@ The Helper is a **Chrome side panel**. Chrome places it next to the BridalLive t
 
 | Place | What it is for |
 |-------|----------------|
+| **Home** | Sign in, sign out, and pick the working boutique |
 | Side panel | Inventory, Labels, and Settings |
 | **BL** button on the page | Open or close the Helper (drag to move it) |
 | Chrome toolbar icon | Same as **BL** — opens the Helper |
-| Home | Which BridalLive screen you are on, and a shortcut into Inventory or Labels |
 
 ## How work gets done
 
-- **Search and new sizes/colors** talk to BridalLive after you connect a location in Settings. If nothing is connected, Inventory uses a sample catalog.
-- **Add to order** uses the sale you have open in the BridalLive tab.
-- **Labels** build a PDF in the Helper and open Chrome’s print preview. Receiving vouchers and item lookups use the connected store.
+- **Login** is a Helper account (email + password) on Home. It is not the BridalLive password.
+- **Working location** (White Plains or Poughkeepsie) is chosen on Home. Inventory and labels follow that shop.
+- **Search, new sizes/colors, receiving vouchers, reprints, and add-to-sale** go to the Helper server as `/bl/...`. The server holds each location’s BridalLive Retailer ID and API key, signs into BridalLive, and forwards only allowlisted paths (`/api/items`, `/api/receivingVouchers`, `/api/receivingVoucherItems`, `/api/posTransactions`).
+- **Add to order** still needs the sale you have open in the BridalLive tab.
+- **Labels** build a PDF in the Helper and open Chrome’s print preview.
+
+The extension never stores or displays BridalLive keys. Settings is text size and inventory columns.
 
 Nothing in the Helper is meant to replace BridalLive. It is a workstation beside the page you already use.
 
 ## Install notes
 
-Load the unpacked extension from the `dist/` folder after a build. Details are in [Set up the Helper](./SETUP.md).
+Until the private Chrome Web Store listing is live, load the unpacked extension from the `dist/` folder after a build. Details are in [Set up the Helper](./SETUP.md).
 
-The product destination (backend, login, per-shop inventory, private Chrome Web Store) is [Phase 3](./PHASE_3.md).
+The product destination is [Phase 3](./PHASE_3.md).

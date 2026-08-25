@@ -1,9 +1,6 @@
 import { bridalLiveFetch } from './bridallive-auth'
-import {
-  isLocationConfigured,
-  loadBridalLiveApiSettings,
-  type BridalLiveLocationCredentials,
-} from './bridallive-credentials'
+import { DEFAULT_BRIDALLIVE_LOCATIONS } from './bridallive-credentials'
+import { getWorkingLocationId } from './helper-session'
 import type { ReceivingVoucherLine } from '../labels/types'
 
 export type BridalLiveReceivingVoucherSummary = {
@@ -71,21 +68,11 @@ function mapVoucherLine(item: BridalLiveReceivingVoucherItem): ReceivingVoucherL
   }
 }
 
-async function resolveLocation(
-  storeId?: string,
-): Promise<BridalLiveLocationCredentials> {
-  const settings = await loadBridalLiveApiSettings()
-  const configured = settings.locations.filter(isLocationConfigured)
-  if (storeId) {
-    const match = configured.find((l) => l.id === storeId)
-    if (match) return match
-  }
-  const active = configured.find((l) => l.id === settings.activeLocationId)
-  if (active) return active
-  if (configured[0]) return configured[0]
-  throw new Error(
-      'Sign in on Home and pick your working location first.',
-  )
+async function resolveLocation(storeId?: string): Promise<{ id: string; name: string }> {
+  const id = storeId || (await getWorkingLocationId())
+  const match = DEFAULT_BRIDALLIVE_LOCATIONS.find((l) => l.id === id)
+  if (match) return match
+  return DEFAULT_BRIDALLIVE_LOCATIONS[0]!
 }
 
 function isOpenStatus(status: string | undefined): boolean {

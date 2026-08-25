@@ -1,16 +1,8 @@
 import { API_BASE_URL } from '../lib/config'
 import { resolveDataSource } from '../lib/data-source'
-import {
-  isLocationConfigured,
-  loadBridalLiveApiSettings,
-} from '../lib/bridallive-credentials'
+import { HELPER_LOCATIONS, loadHelperSession } from '../lib/helper-session'
 import { searchInventory, createVariant } from '../inventory/service'
-import type {
-  AuthSession,
-  LabelPrintBatchRequest,
-  LabelPrintBatchResult,
-  Store,
-} from './types'
+import type { AuthSession, Store } from './types'
 
 export { searchInventory, createVariant }
 
@@ -22,20 +14,26 @@ const MOCK_STORES: Store[] = [
 export async function listStores(): Promise<Store[]> {
   const source = await resolveDataSource()
   if (source === 'bridallive') {
-    const settings = await loadBridalLiveApiSettings()
-    const configured = settings.locations.filter(isLocationConfigured)
-    if (configured.length > 0) {
-      return configured.map((l) => ({ id: l.id, name: l.name }))
-    }
+    return HELPER_LOCATIONS.map((l) => ({ id: l.id, name: l.name }))
   }
   if (source === 'mock') return MOCK_STORES
   if (!API_BASE_URL) return MOCK_STORES
-  const res = await fetch(`${API_BASE_URL}/stores`)
+  const res = await fetch(`${API_BASE_URL}/locations`)
   if (!res.ok) throw new Error('Failed to load stores')
-  return res.json() as Promise<Store[]>
+  const data = (await res.json()) as { locations?: Store[] }
+  return data.locations ?? MOCK_STORES
 }
 
 export async function getSession(): Promise<AuthSession | null> {
+  const helper = await loadHelperSession()
+  if (helper) {
+    return {
+      userId: helper.user.email,
+      role: 'store',
+      storeId: helper.locationId,
+      email: helper.user.email,
+    }
+  }
   if ((await resolveDataSource()) === 'mock') {
     return {
       userId: 'mock-user',
@@ -44,11 +42,7 @@ export async function getSession(): Promise<AuthSession | null> {
       email: 'admin@example.com',
     }
   }
-  if (!API_BASE_URL) return null
-  const res = await fetch(`${API_BASE_URL}/auth/session`)
-  if (res.status === 401) return null
-  if (!res.ok) throw new Error('Failed to load session')
-  return res.json() as Promise<AuthSession>
+  return null
 }
 
 export { printLabelBatch } from '../labels/service'

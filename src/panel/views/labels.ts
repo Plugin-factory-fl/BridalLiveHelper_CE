@@ -18,11 +18,7 @@ import {
   layoutOptionsForDropdown,
   tagPreviewUrl,
 } from '../../labels/style-layouts'
-import {
-  getActiveBridalLiveCredentials,
-  isLocationConfigured,
-} from '../../lib/bridallive-credentials'
-import { getWorkingLocationId } from '../../lib/helper-session'
+import { peekHelperSession, getWorkingLocationId } from '../../lib/helper-session'
 import {
   getReceivingVoucherLines,
   listReceivingVouchers,
@@ -30,6 +26,7 @@ import {
 } from '../../lib/bridallive-receiving'
 import { getPanelContext } from '../panel-context'
 import { playViewFade } from '../view-fade'
+import { renderSignInRequired } from '../sign-in-required'
 import { mountMassLabeling } from './mass-labeling'
 import type { ViewRender } from '../router'
 
@@ -65,6 +62,9 @@ function buildStyleLayoutOptions(): string {
 }
 
 export const renderLabels: ViewRender = (root) => {
+  if (!peekHelperSession()) {
+    return renderSignInRequired(root, 'print labels')
+  }
   const section = document.createElement('section')
   section.className = 'view view-labels'
   const styleOptions = buildStyleLayoutOptions()
@@ -409,12 +409,10 @@ export const renderLabels: ViewRender = (root) => {
 
   const loadWorkingLocation = async () => {
     receivingLocationId = await getWorkingLocationId()
-    const creds = await getActiveBridalLiveCredentials()
-    if (!creds || !isLocationConfigured(creds.location)) {
+    if (!peekHelperSession()) {
       voucherSelect.innerHTML = '<option value="">—</option>'
       voucherSelect.disabled = true
-      receivingHint.textContent =
-        'Sign in on Home and pick your working location. The Helper server supplies this boutique’s BridalLive keys.'
+      receivingHint.textContent = 'Sign in on Home and pick your working location.'
       return false
     }
     return true
@@ -599,8 +597,7 @@ export const renderLabels: ViewRender = (root) => {
       return
     }
 
-    const creds = await getActiveBridalLiveCredentials()
-    if (!creds) {
+    if (!peekHelperSession()) {
       setStatus(
         'Sign in on Home and pick your working location before reprinting labels.',
         'error',
@@ -610,7 +607,7 @@ export const renderLabels: ViewRender = (root) => {
 
     setStatus(`Looking up item #${itemNumber}…`, '')
     try {
-      const storeId = receivingLocationId || creds.location.id
+      const storeId = receivingLocationId || (await getWorkingLocationId())
       const match = await lookupInventoryByItemNumber(itemNumber, storeId)
       if (!match) {
         setStatus(

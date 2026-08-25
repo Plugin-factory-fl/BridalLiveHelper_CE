@@ -1,8 +1,12 @@
 # Set up BridalLive Helper
 
-Do this once per computer. After that, staff only need to open BridalLive and click **BL**.
+Staff do this once per computer. After that, open BridalLive and click **BL**.
+
+BridalLive Retailer IDs and API keys are **not** pasted into the Helper. They live on the Helper server. Settings is only text size and inventory columns.
 
 ## Install in Chrome
+
+The shop’s long-term install is a **private Chrome Web Store listing**. Until that listing is live, load the built `dist/` folder as an unpacked extension:
 
 1. Get the built Helper folder (`dist/`). If you are building from this project:
 
@@ -18,23 +22,33 @@ Do this once per computer. After that, staff only need to open BridalLive and cl
 
 Use **Chrome 141 or newer**. After a Helper update, click **Reload** on the extension card in `chrome://extensions`.
 
-## Connect your stores
+## Sign in
 
-Inventory, new sizes/colors, receiving vouchers, and label reprints use live BridalLive data only after each location is connected.
+1. Open the Helper on **Home**.
+2. Sign in with your shop email and password (or create an account if the shop allows it).
+3. Pick **White Plains** or **Poughkeepsie**. You can switch later on Home.
 
-1. In the Helper, open **Settings**.
-2. For **White Plains** and **Poughkeepsie**, paste the **Retailer ID** and **API key**.
-   - In BridalLive: **Settings → Account → API**
-   - Each location has its own pair.
-3. Set **Store data** to **Live store** for real inventory. Use **Practice** only when you are working in BridalLive’s QA site.
-4. Click **Test connection**, then **Save**.
+Inventory, new sizes/colors, receiving vouchers, and label reprints use live BridalLive data for that boutique. You must be signed in — the Helper does not fall back to a sample catalog as the real path.
 
-Keys stay in this Chrome profile on this computer. They are not uploaded anywhere else.
-
-Until a location is connected, Inventory shows a sample catalog so you can still explore the Helper.
+If sign-in fails, the Helper server may be asleep or missing shop accounts. Ask Alex.
 
 ## After setup
 
 - On a **sale**: look up a style, add a size or color, then add the item to the open order.
 - On **receiving**: load the voucher in **Labels** and print one label per received piece.
 - Print labels at **100%** scale. Do not use “Fit to page.”
+
+## Helper server (Alex)
+
+Production API: **https://bridallivehelper-ce.onrender.com**.
+
+Copy `.env.example` to `.env` (local) or set the same variables on Render:
+
+- `HELPER_USERS` — seed accounts (imported once, then hashed in `data/helper-users.json`)
+- `BL_WP_RETAILER_ID` / `BL_WP_API_KEY` — White Plains
+- `BL_PK_RETAILER_ID` / `BL_PK_API_KEY` — Poughkeepsie
+- Optional `HELPER_SIGNUP_CODE` if Create account should require a shop PIN
+
+On Render, attach a **persistent disk** at `/opt/render/project/src/data` (or set `HELPER_DATA_DIR` to the mount). Without a disk, created accounts and sign-in sessions disappear when the service restarts.
+
+The extension never receives BridalLive keys. Signed-in staff call `/bl/...` on the Helper server; the server logs into BridalLive and forwards allowlisted inventory, receiving, and POS requests.

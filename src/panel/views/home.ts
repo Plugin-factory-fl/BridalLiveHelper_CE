@@ -237,20 +237,23 @@ export const renderHome: ViewRender = (root) => {
         <label class="auth-field">Working location
           <select id="blh-home-location">${locationOptionsHtml(session.locationId)}</select>
         </label>
-        <p class="auth-session-hint muted small">Inventory and labels use this boutique. Adding to a sale still uses the BridalLive tab you have open.</p>
+        <p class="auth-session-hint muted small">Inventory and labels use this boutique (live BridalLive). Adding to a sale still uses the BridalLive tab you have open.</p>
         <button type="button" class="btn btn-ghost btn-block" id="blh-home-logout">Sign out</button>
         <p class="status auth-status" id="blh-home-location-status" role="status"></p>
       </div>
     `
 
     accountEl.querySelector('#blh-home-location')?.addEventListener('change', async (e) => {
-      const locationId = (e.target as HTMLSelectElement).value
+      const select = e.target as HTMLSelectElement
+      const locationId = select.value
+      const previous = session?.locationId ?? locationId
       const status = accountEl.querySelector('#blh-home-location-status') as HTMLElement
       try {
         session = await setWorkingLocation(locationId)
-        status.textContent = `Using ${locationName(locationId)}.`
+        status.textContent = `Using ${locationName(locationId)} (live store).`
         status.className = 'status auth-status success'
       } catch (err) {
+        select.value = previous
         status.textContent = err instanceof Error ? err.message : 'Could not switch location.'
         status.className = 'status auth-status error'
       }

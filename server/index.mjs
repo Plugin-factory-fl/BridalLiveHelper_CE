@@ -1,9 +1,10 @@
 import http from 'node:http'
-import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createUserStore } from './users.mjs'
+import { createSessionStore } from './sessions.mjs'
+import { allowedBridalLivePath, createBridalLiveProxy } from './bridallive.mjs'
 
 const rootDir = path.dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
 for (const name of ['.env', '.env.example']) {
@@ -29,13 +30,13 @@ const userStore = createUserStore({
   signupCode: process.env.HELPER_SIGNUP_CODE ?? '',
   signupEnabled: process.env.HELPER_SIGNUP_DISABLED !== '1',
 })
+const sessionStore = createSessionStore(DATA_DIR)
 
 const LOCATIONS = [
   { id: 'white-plains', name: 'White Plains' },
   { id: 'poughkeepsie', name: 'Poughkeepsie' },
 ]
 
-/** Keys stay on the server — never sent to the extension. */
 const LOCATION_SECRETS = {
   'white-plains': {
     retailerId: process.env.BL_WP_RETAILER_ID ?? '',
@@ -47,19 +48,39 @@ const LOCATION_SECRETS = {
   },
 }
 
-/** token → { email, locationId } */
-const sessions = new Map()
+function locationSecrets(locationId) {
+  return LOCATION_SECRETS[locationId] ?? { retailerId: '', apiKey: '' }
+}
+
+const bridalLive = createBridalLiveProxy({
+  locationSecrets,
+  environment: process.env.BL_ENVIRONMENT === 'qa' ? 'qa' : 'production',
+})
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Helper-Location',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+}
 
 function send(res, status, body) {
   const json = JSON.stringify(body)
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(json),
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    ...CORS,
   })
   res.end(json)
+}
+
+function sendRaw(res, status, text) {
+  const payload = text ?? ''
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(payload),
+    ...CORS,
+  })
+  res.end(payload)
 }
 
 function readBody(req) {
@@ -69,13 +90,13 @@ function readBody(req) {
     req.on('end', () => {
       const raw = Buffer.concat(chunks).toString('utf8')
       if (!raw) {
-        resolve({})
+        resolve({ json: {}, raw: '' })
         return
       }
       try {
-        resolve(JSON.parse(raw))
+        resolve({ json: JSON.parse(raw), raw })
       } catch {
-        reject(new Error('Invalid JSON'))
+        resolve({ json: {}, raw })
       }
     })
     req.on('error', reject)
@@ -88,15 +109,23 @@ function bearer(req) {
   return match?.[1] ?? ''
 }
 
-function locationSecrets(locationId) {
-  return LOCATION_SECRETS[locationId] ?? { retailerId: '', apiKey: '' }
+function requireSession(req, res) {
+  const token = bearer(req)
+  const record = sessionStore.get(token)
+  if (!record) {
+    send(res, 401, { message: 'Sign in on Home first.' })
+    return null
+  }
+  return { token, record }
+}
+
+function resolveLocationId(requested) {
+  return LOCATIONS.some((l) => l.id === requested) ? requested : 'poughkeepsie'
 }
 
 function publicSession(token, record) {
   const user = userStore.get(record.email)
-  const secrets = locationSecrets(record.locationId)
-  const environment = process.env.BL_ENVIRONMENT === 'qa' ? 'qa' : 'production'
-  const ready = Boolean(secrets.retailerId && secrets.apiKey)
+  const connected = bridalLive.isReady(record.locationId)
   return {
     token,
     user: {
@@ -105,21 +134,16 @@ function publicSession(token, record) {
     },
     locationId: record.locationId,
     locations: LOCATIONS,
-    bridalLive: ready
-      ? {
-          retailerId: secrets.retailerId,
-          apiKey: secrets.apiKey,
-          environment,
-        }
-      : null,
+    bridalLive: {
+      connected,
+      environment: bridalLive.environment,
+    },
   }
 }
 
 function startSession(email, locationId) {
-  const token = crypto.randomUUID()
-  const requested = String(locationId ?? '')
-  const resolved = LOCATIONS.some((l) => l.id === requested) ? requested : 'poughkeepsie'
-  sessions.set(token, { email, locationId: resolved })
+  const resolved = resolveLocationId(String(locationId ?? ''))
+  const token = sessionStore.create(email, resolved)
   return publicSession(token, { email, locationId: resolved })
 }
 
@@ -143,8 +167,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/auth/login') {
-      const body = await readBody(req)
-      const email = String(body.email ?? '').trim().toLowerCase()
+      const { json: body } = await readBody(req)
+      const email = String(body.email ?? '')
+        .trim()
+        .toLowerCase()
       const password = String(body.password ?? '')
       const user = userStore.authenticate(email, password)
       if (!user) {
@@ -156,7 +182,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/auth/register') {
-      const body = await readBody(req)
+      const { json: body } = await readBody(req)
       const result = userStore.register({
         email: body.email,
         password: body.password,
@@ -172,38 +198,30 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/auth/session') {
-      const token = bearer(req)
-      const record = sessions.get(token)
-      if (!record) {
-        send(res, 401, { message: 'Not signed in.' })
-        return
-      }
-      send(res, 200, publicSession(token, record))
+      const authed = requireSession(req, res)
+      if (!authed) return
+      send(res, 200, publicSession(authed.token, authed.record))
       return
     }
 
     if (req.method === 'POST' && url.pathname === '/auth/logout') {
-      const token = bearer(req)
-      sessions.delete(token)
+      sessionStore.delete(bearer(req))
       send(res, 200, { ok: true })
       return
     }
 
     if (req.method === 'POST' && url.pathname === '/auth/location') {
-      const token = bearer(req)
-      const record = sessions.get(token)
-      if (!record) {
-        send(res, 401, { message: 'Not signed in.' })
-        return
-      }
-      const body = await readBody(req)
+      const authed = requireSession(req, res)
+      if (!authed) return
+      const { json: body } = await readBody(req)
       const locationId = String(body.locationId ?? '')
       if (!LOCATIONS.some((l) => l.id === locationId)) {
         send(res, 400, { message: 'Unknown location.' })
         return
       }
-      record.locationId = locationId
-      send(res, 200, publicSession(token, record))
+      sessionStore.setLocation(authed.token, locationId)
+      authed.record.locationId = locationId
+      send(res, 200, publicSession(authed.token, authed.record))
       return
     }
 
@@ -212,18 +230,48 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
+    if (url.pathname.startsWith('/bl/')) {
+      const authed = requireSession(req, res)
+      if (!authed) return
+      const blPath = url.pathname.slice(3)
+      if (!allowedBridalLivePath(blPath)) {
+        send(res, 403, { message: 'That BridalLive request is not allowed.' })
+        return
+      }
+      const headerLoc = String(req.headers['x-helper-location'] ?? '').trim()
+      const locationId = LOCATIONS.some((l) => l.id === headerLoc)
+        ? headerLoc
+        : authed.record.locationId
+      const { raw } = await readBody(req)
+      const result = await bridalLive.forward({
+        locationId,
+        method: req.method,
+        path: blPath,
+        search: url.search,
+        body: raw,
+        contentType: req.headers['content-type'],
+      })
+      sendRaw(res, result.status, result.text)
+      return
+    }
+
     send(res, 404, { message: 'Not found' })
   } catch (err) {
-    send(res, 400, { message: err instanceof Error ? err.message : 'Bad request' })
+    const status = Number(err?.status) || 400
+    send(res, status, { message: err instanceof Error ? err.message : 'Bad request' })
   }
 })
 
 server.listen(PORT, () => {
   const secretsReady = Object.values(LOCATION_SECRETS).every((s) => s.retailerId && s.apiKey)
   console.log(`Helper API http://127.0.0.1:${PORT}`)
-  console.log(`  users: ${userStore.count()} (file ${path.join(DATA_DIR, 'helper-users.json')}; HELPER_USERS seeds new emails)`)
+  console.log(
+    `  users: ${userStore.count()} (file ${path.join(DATA_DIR, 'helper-users.json')})`,
+  )
   console.log(
     `  signup: ${userStore.signupConfig().enabled ? (userStore.signupConfig().codeRequired ? 'open with shop code' : 'open') : 'disabled'}`,
   )
-  console.log(`  BridalLive location keys: ${secretsReady ? 'loaded' : 'missing in env (not sent to the extension)'}`)
+  console.log(
+    `  BridalLive keys: ${secretsReady ? 'on the server only (proxied, never sent to the extension)' : 'missing in env'}`,
+  )
 })

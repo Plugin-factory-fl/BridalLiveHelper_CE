@@ -2,7 +2,7 @@
 
 Staff on a sale need a side workstation: look up an item, catch a duplicate size/color, and add a new variant without leaving the order.
 
-Connect your stores in [Settings](./SETUP.md) so search uses live BridalLive inventory.
+Sign in on **Home** and pick the boutique you are working at so search uses live BridalLive inventory.
 
 ## Search
 
@@ -28,5 +28,5 @@ On a sale screen, each result also has **⊕**. That adds the item to the order 
 ## Tips
 
 - Search across **All locations** when you are not sure which boutique has the piece.
-- If nothing loads, open **Settings** and confirm that location is connected, then use **Live store** for real inventory.
+- If nothing loads, sign in on **Home** and confirm the working location. BridalLive keys are on the Helper server, not in Settings.
 - Copy name, vendor item name, or item # with the copy control in that cell.

@@ -29,8 +29,8 @@ function providerFor(source: Awaited<ReturnType<typeof resolveDataSource>>): Inv
 }
 
 /**
- * Runtime-selected provider. Uses BridalLive when Home sign-in stored shop keys
- * (or when `VITE_BRIDALLIVE_API=true` at build time).
+ * Runtime-selected provider. Uses live BridalLive (proxied by the Helper server)
+ * when staff are signed in on Home.
  */
 export const inventoryProvider: InventoryProvider = {
   async search(query, storeId) {

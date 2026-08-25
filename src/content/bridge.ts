@@ -8,9 +8,8 @@ import {
 import { applySaleSearchToOrder } from './order-context'
 import { readOpenPosTransaction } from './pos-transaction'
 import { addInventoryItemToPosTransaction } from '../lib/bridallive-pos'
-import { getActiveBridalLiveCredentials } from '../lib/bridallive-credentials'
+import { getWorkingLocationId } from '../lib/helper-session'
 import { MSG, type ExtensionMessage, type ExtensionResponse } from '../lib/messages'
-import { loadPreferences } from '../lib/storage'
 import { detectContext } from './context'
 import { log, warn } from '../lib/log'
 
@@ -34,10 +33,7 @@ export function initBridge(): void {
 }
 
 async function resolveStoreId(): Promise<string> {
-  const prefs = await loadPreferences()
-  if (prefs.mockStoreId) return prefs.mockStoreId
-  const creds = await getActiveBridalLiveCredentials()
-  return creds?.location.id ?? 'store-1'
+  return getWorkingLocationId()
 }
 
 async function handleMessage(message: ExtensionMessage): Promise<ExtensionResponse> {
@@ -103,17 +99,17 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
         return { ok: false, error: 'Item number is required to add to the order.' }
       }
 
-      const creds = await getActiveBridalLiveCredentials()
+      const storeId = await resolveStoreId()
       const openTrx = readOpenPosTransaction()
 
-      if (creds && openTrx && (openTrx.id || openTrx.trxNumber)) {
+      if (openTrx && (openTrx.id || openTrx.trxNumber)) {
         try {
           const apiResult = await addInventoryItemToPosTransaction({
             itemNumber,
             inventoryItemId: message.inventoryItemId,
             posTransactionId: openTrx.id,
             trxNumber: openTrx.trxNumber,
-            storeId: creds.location.id,
+            storeId,
           })
           if (apiResult.ok) {
             log('add to order via API', apiResult.message)

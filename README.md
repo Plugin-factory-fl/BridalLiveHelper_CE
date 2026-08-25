@@ -15,15 +15,16 @@ First-time install: see [Set up the Helper](docs/SETUP.md).
 
 ## What you can do
 
-- **Inventory** — Search every connected location. Add another size or color from an existing item. On a sale, add a found item to the open order.
+- **Home** — Sign in with your shop account and pick White Plains or Poughkeepsie.
+- **Inventory** — Search that boutique. Add another size or color from an existing item. On a sale, add a found item to the open order.
 - **Labels** — Print Avery 5160 labels from a receiving voucher, a spreadsheet (Mass Labeling), or reprint one item.
-- **Settings** — Connect each boutique, pick text size, and choose which inventory columns you see.
+- **Settings** — Text size and which inventory columns you see. Not a place to paste BridalLive keys.
 
-Until a store is connected in Settings, Inventory uses a sample catalog so you can still learn the screens.
+You must sign in on Home before Inventory or Labels. BridalLive keys stay on the Helper server.
 
 ## Guides
 
-- [Set up the Helper](docs/SETUP.md) — install in Chrome and connect your stores
+- [Set up the Helper](docs/SETUP.md) — install in Chrome and sign in
 - [Using Inventory](docs/INVENTORY_PILLAR.md)
 - [Printing labels](docs/BRIDALLIVE_CONTEXT.md)
 - [How it works](docs/ARCHITECTURE.md)

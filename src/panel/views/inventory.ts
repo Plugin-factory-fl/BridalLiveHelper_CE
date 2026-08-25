@@ -9,7 +9,7 @@ import {
   type InventoryColumnId,
   type InventoryUiState,
 } from '../../lib/inventory-ui-state'
-import { getWorkingLocationId } from '../../lib/helper-session'
+import { peekHelperSession, getWorkingLocationId } from '../../lib/helper-session'
 import {
   checkDuplicateVariant,
   createVariant,
@@ -29,6 +29,7 @@ import {
 import type { BridalLiveContext } from '../../types/context'
 import type { ViewRender } from '../router'
 import { locationShorthand } from '../../lib/location-code'
+import { renderSignInRequired } from '../sign-in-required'
 
 async function resolveStoreId(): Promise<string> {
   return getWorkingLocationId()
@@ -149,6 +150,9 @@ const departmentOptionsHtml = [
 ].join('')
 
 export const renderInventory: ViewRender = (root) => {
+  if (!peekHelperSession()) {
+    return renderSignInRequired(root, 'look up inventory')
+  }
   const section = document.createElement('section')
   section.className = 'view view-inventory'
   section.innerHTML = `

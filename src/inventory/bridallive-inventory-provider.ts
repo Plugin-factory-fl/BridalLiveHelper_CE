@@ -1,11 +1,7 @@
 import type { InventoryItem, InventorySearchQuery } from '../types/inventory'
+import { bridalLiveFetch } from '../lib/bridallive-auth'
 import {
-  bridalLiveFetch,
-  resolveLocationCredentials,
-} from '../lib/bridallive-auth'
-import {
-  isLocationConfigured,
-  loadBridalLiveApiSettings,
+  DEFAULT_BRIDALLIVE_LOCATIONS,
   type BridalLiveLocationCredentials,
 } from '../lib/bridallive-credentials'
 import {
@@ -128,18 +124,16 @@ async function locationsToSearch(
   locationId: string | undefined,
   storeId: string,
 ): Promise<BridalLiveLocationCredentials[]> {
-  const settings = await loadBridalLiveApiSettings()
-  const configured = settings.locations.filter(isLocationConfigured)
+  const shops = DEFAULT_BRIDALLIVE_LOCATIONS
 
   if (locationId) {
-    const match = configured.find((l) => l.id === locationId)
+    const match = shops.find((l) => l.id === locationId)
     return match ? [match] : []
   }
 
-  // No location filter → all configured locations (e.g. “All locations” in the panel).
-  if (configured.length > 0) return configured
+  if (shops.length > 0) return [...shops]
 
-  const fallback = configured.find((l) => l.id === storeId)
+  const fallback = shops.find((l) => l.id === storeId)
   return fallback ? [fallback] : []
 }
 
@@ -318,11 +312,6 @@ async function createVariant(
     return { ok: false, message: dup }
   }
 
-  const creds = await resolveLocationCredentials(source.location.id)
-  if (!creds) {
-    return { ok: false, message: `No BridalLive connection for ${source.location.name}. Sign in on Home and pick that boutique.` }
-  }
-
   const body = buildVariantCreateBody(source.item, size, color, {
     name: styleId,
     vendorItemName,
@@ -397,8 +386,7 @@ async function createVariant(
 }
 
 /**
- * Live BridalLive inventory provider (Phase 2).
- * Uses shop keys from Home sign-in → apiLogin → /api/items/*.
+ * Live BridalLive inventory. The Helper server holds shop keys and proxies /api/items/*.
  */
 export const bridalliveInventoryProvider: InventoryProvider = {
   search,

@@ -2,6 +2,7 @@ import { API_BASE_URL, STORAGE_KEYS } from './config'
 import { clearBridalLiveSessions } from './bridallive-auth'
 import {
   DEFAULT_BRIDALLIVE_LOCATIONS,
+  isLocationConfigured,
   loadBridalLiveApiSettings,
   saveBridalLiveApiSettings,
   type BridalLiveApiEnvironment,
@@ -30,9 +31,30 @@ export type HelperSession = {
 }
 
 export type BridalLiveFromServer = {
+  connected?: boolean
+  retailerId?: string
+  apiKey?: string
+  environment?: BridalLiveApiEnvironment
+}
+
+function locationName(id: string): string {
+  return HELPER_LOCATIONS.find((l) => l.id === id)?.name ?? id
+}
+
+function hasLiveKeys(bl: BridalLiveFromServer | null | undefined): bl is BridalLiveFromServer & {
   retailerId: string
   apiKey: string
-  environment?: BridalLiveApiEnvironment
+} {
+  return Boolean(bl?.retailerId?.trim() && bl?.apiKey?.trim())
+}
+
+function isBoutiqueReady(
+  bl: BridalLiveFromServer | null | undefined,
+  locationConfigured: boolean,
+): boolean {
+  if (bl?.connected === true) return true
+  if (hasLiveKeys(bl)) return true
+  return locationConfigured
 }
 
 export const HELPER_LOCATIONS: HelperLocation[] = DEFAULT_BRIDALLIVE_LOCATIONS.map(
@@ -74,6 +96,40 @@ export async function loadHelperSession(): Promise<HelperSession | null> {
   return cachedSession
 }
 
+/** Confirm the Helper server still has this token. Does not sign you out if it restarted. */
+export async function validateHelperSession(): Promise<HelperSession | null> {
+  const session = await loadHelperSession()
+  if (!session?.token || !API_BASE_URL) return session
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/session`, {
+      headers: { Authorization: `Bearer ${session.token}` },
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (res.status === 401) {
+      /* Keep the local session so Poughkeepsie inventory already on this computer
+         keeps working. Switching boutique will ask them to sign in again. */
+      return session
+    }
+    if (!res.ok) return session
+    const data = (await res.json()) as {
+      locationId?: string
+      user?: HelperUser
+      bridalLive?: BridalLiveFromServer | null
+    }
+    const locationId = data.locationId || session.locationId
+    const user = data.user ?? session.user
+    await applyWorkingLocation(locationId, data.bridalLive)
+    if (locationId === session.locationId && user.email === session.user.email) {
+      return session
+    }
+    const next: HelperSession = { ...session, locationId, user }
+    await saveHelperSession(next)
+    return next
+  } catch {
+    return session
+  }
+}
+
 export async function saveHelperSession(session: HelperSession): Promise<void> {
   cachedSession = session
   await chrome.storage.local.set({ [STORAGE_KEYS.helperSession]: session })
@@ -101,14 +157,14 @@ async function applyWorkingLocation(
   clearBridalLiveSessions()
   const locations = DEFAULT_BRIDALLIVE_LOCATIONS.map((fallback) => {
     const existing = settings.locations.find((l) => l.id === fallback.id) ?? fallback
-    if (fallback.id !== locationId || !bridalLive?.retailerId || !bridalLive.apiKey) {
+    if (fallback.id !== locationId || !hasLiveKeys(bridalLive)) {
       return { ...existing, id: fallback.id, name: fallback.name }
     }
     return {
       id: fallback.id,
       name: fallback.name,
-      retailerId: bridalLive.retailerId,
-      apiKey: bridalLive.apiKey,
+      retailerId: bridalLive.retailerId.trim(),
+      apiKey: bridalLive.apiKey.trim(),
     }
   })
   await saveBridalLiveApiSettings({
@@ -125,6 +181,8 @@ export async function setWorkingLocation(locationId: string): Promise<HelperSess
 
   const session = await loadHelperSession()
   let bridalLive: BridalLiveFromServer | null = null
+  let helperSessionExpired = false
+
   if (session && API_BASE_URL && session.token) {
     const res = await fetch(`${API_BASE_URL}/auth/location`, {
       method: 'POST',
@@ -134,15 +192,35 @@ export async function setWorkingLocation(locationId: string): Promise<HelperSess
       },
       body: JSON.stringify({ locationId }),
     })
-    if (!res.ok) {
+    if (res.status === 401) {
+      helperSessionExpired = true
+    } else if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { message?: string }
       throw new Error(body.message ?? 'Could not switch location.')
+    } else {
+      const data = (await res.json()) as { bridalLive?: BridalLiveFromServer | null }
+      bridalLive = data.bridalLive ?? null
     }
-    const data = (await res.json()) as { bridalLive?: BridalLiveFromServer | null }
-    bridalLive = data.bridalLive ?? null
   }
 
   await applyWorkingLocation(locationId, bridalLive)
+  const settings = await loadBridalLiveApiSettings()
+  const loc = settings.locations.find((l) => l.id === locationId)
+  const ready = isBoutiqueReady(bridalLive, isLocationConfigured(loc))
+
+  if (!ready && helperSessionExpired) {
+    throw new Error(
+      `Sign in again on Home, then pick ${locationName(locationId)}. ` +
+        'The Helper server dropped this session. Poughkeepsie still worked because it was already connected on this computer.',
+    )
+  }
+  if (!ready) {
+    throw new Error(
+      `${locationName(locationId)} is not connected on the Helper server yet. ` +
+        'Ask Alex to add that boutique’s Live BridalLive API keys (not Practice).',
+    )
+  }
+
   if (!session) return null
   const next = { ...session, locationId }
   await saveHelperSession(next)

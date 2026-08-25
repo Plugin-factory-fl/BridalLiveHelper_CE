@@ -20,7 +20,7 @@ When a receiving voucher is open:
 - Pick the **location** and **voucher**.
 - Check the lines you want, then print. You get one label per received quantity.
 
-If you are not on a receiving screen, you can still pick a voucher from the list after the stores are connected.
+If you are not on a receiving screen, you can still pick a voucher from the list after you sign in on Home.
 
 ## Mass labeling
 

@@ -1,6 +1,6 @@
 import type { InventoryItem } from '../types/inventory'
 import type { LabelLineItem } from '../api/types'
-import { getActiveBridalLiveCredentials } from '../lib/bridallive-credentials'
+import { getWorkingLocationId } from '../lib/helper-session'
 import { resolveDataSource } from '../lib/data-source'
 import { getMockCatalog } from '../inventory/mock-provider'
 import { searchInventory } from '../inventory/service'
@@ -17,8 +17,7 @@ export async function lookupInventoryByItemNumber(
   const want = itemNumber.trim()
   if (!want) return null
 
-  const creds = await getActiveBridalLiveCredentials()
-  const resolvedStoreId = storeId || creds?.location.id || 'poughkeepsie'
+  const resolvedStoreId = storeId || (await getWorkingLocationId())
   const { items } = await searchInventory(
     { itemNumber: want, locationId: resolvedStoreId },
     resolvedStoreId,
@@ -31,7 +30,7 @@ export async function lookupInventoryByItemNumber(
 
 /**
  * Load catalog rows needed to enrich label fields (price, color, size, barcode).
- * Uses BridalLive API when credentials are configured; otherwise mock catalog.
+ * Uses live BridalLive when staff are signed in on Home.
  */
 export async function loadCatalogForLabelPrint(
   lines: LabelLineItem[],
@@ -40,8 +39,7 @@ export async function loadCatalogForLabelPrint(
     return getMockCatalog()
   }
 
-  const creds = await getActiveBridalLiveCredentials()
-  const storeId = creds?.location.id || 'poughkeepsie'
+  const storeId = await getWorkingLocationId()
   const byId = new Map<string, InventoryItem>()
 
   for (const line of lines) {

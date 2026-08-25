@@ -80,7 +80,7 @@ export const STORAGE_KEYS = {
   helperPrintPreview: 'helperPrintPreview',
   /** Uint8 array stored while the print-preview tab is open. */
   helperPrintPdfBytes: 'helperPrintPdfBytes',
-  /** Phase 2: per-location Retailer ID + API key (chrome.storage.local). */
+  /** Working location id (BridalLive keys stay on the Helper server). */
   bridalLiveApiSettings: 'bridalLiveApiSettings',
   /** Phase 3: Helper employee session (token + working location). */
   helperSession: 'helperSession',

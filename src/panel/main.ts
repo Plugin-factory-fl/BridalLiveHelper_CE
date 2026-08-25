@@ -1,6 +1,7 @@
 import type { ActiveView } from '../lib/config'
 import { MSG } from '../lib/messages'
-import { loadHelperSession, loadSignupConfig } from '../lib/helper-session'
+import { loadBridalLiveApiSettings } from '../lib/bridallive-credentials'
+import { loadSignupConfig, validateHelperSession } from '../lib/helper-session'
 import { applyFontSizePreference, loadPreferences } from '../lib/storage'
 import { connectPanelLifecycle, onContextUpdate, sendToContent } from './bridge-client'
 import { navigate, registerView } from './router'
@@ -72,7 +73,11 @@ async function init(): Promise<void> {
   const prefs = await loadPreferences()
   applyFontSizePreference(prefs.fontSize)
 
-  await Promise.all([initPanelContextFromStorage(), loadHelperSession()])
+  await Promise.all([
+    initPanelContextFromStorage(),
+    validateHelperSession(),
+    loadBridalLiveApiSettings(),
+  ])
   void loadSignupConfig()
   connectPanelLifecycle()
   wireNav()
