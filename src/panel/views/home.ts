@@ -7,7 +7,8 @@ import {
   helperLogout,
   helperRegister,
   loadHelperSession,
-  loadSignupConfig,
+  peekHelperSession,
+  peekSignupConfig,
   setWorkingLocation,
   type HelperSession,
   type HelperSignupConfig,
@@ -48,10 +49,8 @@ export const renderHome: ViewRender = (root) => {
   section.innerHTML = `
     <div id="blh-home-account" class="home-account"></div>
 
-    <div id="blh-home-work" class="home-work">
-      <div id="blh-home-context" class="context-card">
-        <p class="muted">Opening BridalLive…</p>
-      </div>
+    <div id="blh-home-work" class="home-work" hidden>
+      <div id="blh-home-context" class="context-card" hidden></div>
       <h3 class="subheading">Quick actions</h3>
       <ul class="action-list">
         <li><button type="button" class="btn btn-secondary" data-nav="inventory">Look up a style, size, or color</button></li>
@@ -64,9 +63,13 @@ export const renderHome: ViewRender = (root) => {
 
   const accountEl = section.querySelector('#blh-home-account') as HTMLElement
   const workEl = section.querySelector('#blh-home-work') as HTMLElement
-  let session: HelperSession | null = null
+  let session: HelperSession | null = peekHelperSession()
+  let accountReady = true
   let authMode: AuthMode = 'signin'
-  let signupConfig: HelperSignupConfig = { enabled: true, codeRequired: false }
+  let signupConfig: HelperSignupConfig = peekSignupConfig() ?? {
+    enabled: true,
+    codeRequired: false,
+  }
   let draft = {
     email: '',
     displayName: '',
@@ -74,11 +77,15 @@ export const renderHome: ViewRender = (root) => {
   }
 
   const paintWorkVisibility = () => {
-    workEl.hidden = !session
+    workEl.hidden = !accountReady || !session
   }
 
   const paintAccount = () => {
     paintWorkVisibility()
+    if (!accountReady) {
+      accountEl.innerHTML = ''
+      return
+    }
 
     if (!session) {
       const isSignup = authMode === 'signup' && signupConfig.enabled
@@ -263,8 +270,8 @@ export const renderHome: ViewRender = (root) => {
     const context = getPanelContext()
     if (!el) return
     if (!context) {
-      el.hidden = false
-      el.innerHTML = `<p class="muted">Open a BridalLive tab to see which screen you are on.</p>`
+      el.hidden = true
+      el.innerHTML = ''
       return
     }
 
@@ -290,13 +297,6 @@ export const renderHome: ViewRender = (root) => {
     `
   }
 
-  void (async () => {
-    const [loaded, config] = await Promise.all([loadHelperSession(), loadSignupConfig()])
-    session = loaded
-    signupConfig = config
-    if (!signupConfig.enabled) authMode = 'signin'
-    paintAccount()
-  })()
   paintAccount()
   paintContext()
 

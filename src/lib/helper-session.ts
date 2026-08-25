@@ -18,6 +18,11 @@ export type HelperLocation = {
   name: string
 }
 
+export type HelperSignupConfig = {
+  enabled: boolean
+  codeRequired: boolean
+}
+
 export type HelperSession = {
   token: string
   user: HelperUser
@@ -40,9 +45,10 @@ function notifySessionChanged(): void {
   document.dispatchEvent(new CustomEvent(HELPER_SESSION_CHANGED))
 }
 
-export async function loadHelperSession(): Promise<HelperSession | null> {
-  const data = await chrome.storage.local.get(STORAGE_KEYS.helperSession)
-  const raw = data[STORAGE_KEYS.helperSession] as Partial<HelperSession> | undefined
+let cachedSession: HelperSession | null | undefined
+let cachedSignupConfig: HelperSignupConfig | undefined
+
+function parseSession(raw: Partial<HelperSession> | undefined): HelperSession | null {
   if (!raw?.token || !raw.user?.email || !raw.locationId) return null
   return {
     token: String(raw.token),
@@ -54,12 +60,28 @@ export async function loadHelperSession(): Promise<HelperSession | null> {
   }
 }
 
+export function peekHelperSession(): HelperSession | null {
+  return cachedSession ?? null
+}
+
+export function peekSignupConfig(): HelperSignupConfig | undefined {
+  return cachedSignupConfig
+}
+
+export async function loadHelperSession(): Promise<HelperSession | null> {
+  const data = await chrome.storage.local.get(STORAGE_KEYS.helperSession)
+  cachedSession = parseSession(data[STORAGE_KEYS.helperSession] as Partial<HelperSession> | undefined)
+  return cachedSession
+}
+
 export async function saveHelperSession(session: HelperSession): Promise<void> {
+  cachedSession = session
   await chrome.storage.local.set({ [STORAGE_KEYS.helperSession]: session })
   notifySessionChanged()
 }
 
 export async function clearHelperSession(): Promise<void> {
+  cachedSession = null
   await chrome.storage.local.remove(STORAGE_KEYS.helperSession)
   notifySessionChanged()
 }
@@ -154,24 +176,28 @@ function requireApi(): string {
   return API_BASE_URL
 }
 
-export type HelperSignupConfig = {
-  enabled: boolean
-  codeRequired: boolean
-}
-
 export async function loadSignupConfig(): Promise<HelperSignupConfig> {
+  if (cachedSignupConfig) return cachedSignupConfig
   const base = API_BASE_URL
-  if (!base) return { enabled: false, codeRequired: false }
+  if (!base) {
+    cachedSignupConfig = { enabled: false, codeRequired: false }
+    return cachedSignupConfig
+  }
   try {
     const res = await fetch(`${base}/auth/signup-config`)
-    if (!res.ok) return { enabled: true, codeRequired: false }
+    if (!res.ok) {
+      cachedSignupConfig = { enabled: true, codeRequired: false }
+      return cachedSignupConfig
+    }
     const data = (await res.json()) as Partial<HelperSignupConfig>
-    return {
+    cachedSignupConfig = {
       enabled: data.enabled !== false,
       codeRequired: Boolean(data.codeRequired),
     }
+    return cachedSignupConfig
   } catch {
-    return { enabled: true, codeRequired: false }
+    cachedSignupConfig = { enabled: true, codeRequired: false }
+    return cachedSignupConfig
   }
 }
 

@@ -1,8 +1,10 @@
 import type { ActiveView } from '../lib/config'
 import { MSG } from '../lib/messages'
+import { loadHelperSession, loadSignupConfig } from '../lib/helper-session'
 import { applyFontSizePreference, loadPreferences } from '../lib/storage'
 import { connectPanelLifecycle, onContextUpdate, sendToContent } from './bridge-client'
 import { navigate, registerView } from './router'
+import { playViewFade } from './view-fade'
 import { initPanelContextFromStorage, setPanelContext } from './panel-context'
 import { renderHome } from './views/home'
 import { renderInventory } from './views/inventory'
@@ -11,6 +13,7 @@ import { renderSettings } from './views/settings'
 
 const VIEW_ROOT_ID = 'blh-view-root'
 let teardown: (() => void) | void
+let currentView: ActiveView | null = null
 
 registerView('home', renderHome)
 registerView('inventory', renderInventory)
@@ -30,9 +33,12 @@ function setActiveNav(view: ActiveView): void {
 }
 
 function showView(view: ActiveView): void {
+  if (view === currentView) return
+  currentView = view
   if (typeof teardown === 'function') teardown()
   setActiveNav(view)
   teardown = navigate(getViewRoot(), view)
+  playViewFade(getViewRoot().querySelector('.view') as HTMLElement | null)
   void chrome.storage.local.set({ activeView: view })
 }
 
@@ -66,7 +72,8 @@ async function init(): Promise<void> {
   const prefs = await loadPreferences()
   applyFontSizePreference(prefs.fontSize)
 
-  await initPanelContextFromStorage()
+  await Promise.all([initPanelContextFromStorage(), loadHelperSession()])
+  void loadSignupConfig()
   connectPanelLifecycle()
   wireNav()
   wireContext()

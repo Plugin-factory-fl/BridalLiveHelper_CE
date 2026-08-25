@@ -29,6 +29,7 @@ import {
   type BridalLiveReceivingVoucherSummary,
 } from '../../lib/bridallive-receiving'
 import { getPanelContext } from '../panel-context'
+import { playViewFade } from '../view-fade'
 import { mountMassLabeling } from './mass-labeling'
 import type { ViewRender } from '../router'
 
@@ -270,7 +271,7 @@ export const renderLabels: ViewRender = (root) => {
     `
   }
 
-  const paintSubTab = () => {
+  const paintSubTab = (opts?: { fade?: boolean }) => {
     section.querySelectorAll<HTMLButtonElement>('.labels-subnav-btn').forEach((btn) => {
       const isActive = btn.dataset.subtab === activeSubTab
       btn.classList.toggle('active', isActive)
@@ -283,12 +284,19 @@ export const renderLabels: ViewRender = (root) => {
     })
     if (sharedEl) sharedEl.hidden = activeSubTab === 'mass'
     statusEl.hidden = activeSubTab === 'mass'
+    if (opts?.fade) {
+      const visiblePanel = section.querySelector<HTMLElement>(
+        `.labels-tab-panel:not([hidden])`,
+      )
+      playViewFade(visiblePanel)
+      playViewFade(sharedEl)
+    }
   }
 
   const setActiveSubTab = (tab: LabelsSubTab) => {
     if (activeSubTab === tab) return
     activeSubTab = tab
-    paintSubTab()
+    paintSubTab({ fade: true })
     persistUiState()
   }
 

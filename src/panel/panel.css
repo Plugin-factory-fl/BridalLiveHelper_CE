@@ -142,6 +142,33 @@ body {
   padding: 12px;
 }
 
+.view {
+  opacity: 0;
+}
+
+.view.view-fade,
+.view-fade {
+  animation: blh-view-fade-in 2s var(--blh-ease) both;
+}
+
+@keyframes blh-view-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view,
+  .view.view-fade,
+  .view-fade {
+    opacity: 1;
+    animation: none;
+  }
+}
+
 .view-title {
   margin: 0 0 8px;
   font-size: 1.143rem;
@@ -1316,6 +1343,10 @@ body {
   margin-top: 4px;
   padding-top: 12px;
   border-top: 1px solid var(--blh-border);
+}
+
+.labels-shared[hidden] {
+  display: none !important;
 }
 
 .blh-modal--picker {
