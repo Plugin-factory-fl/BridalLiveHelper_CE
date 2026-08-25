@@ -4,7 +4,7 @@ import { DEPARTMENTS } from '../lib/config'
 /** Pick layout per receiving line based on each line's department. */
 export const AUTO_STYLE_LAYOUT_ID = 'auto-by-department'
 
-export type LabelStyleLayoutStatus = 'placeholder' | 'client'
+export type LabelStyleLayoutStatus = 'client'
 
 export type LabelStyleLayout = {
   id: string
@@ -15,9 +15,11 @@ export type LabelStyleLayout = {
   /** Fields printed on this layout (for preview card). */
   fields: string[]
   status: LabelStyleLayoutStatus
+  /** Mockup image in the extension package (`public/tags/…`). */
+  previewImage?: string
 }
 
-const STOCK_FIELDS = [
+const DRESS_FIELDS = [
   'All colors / variants',
   'MSRP (strikethrough)',
   'Sale price',
@@ -26,50 +28,83 @@ const STOCK_FIELDS = [
   'Item #',
 ]
 
-/**
- * Ricky's label designs register here.
- * To add a client design: add an entry + implement its drawer in `draw-label.ts`.
- */
+const JEWELRY_FIELDS = [
+  'Item name',
+  'Color / variant',
+  'MSRP (strikethrough)',
+  'Store code',
+  'Sale price',
+  'Barcode',
+  'Item #',
+]
+
+const SHOES_FIELDS = [
+  'Item name',
+  'Size',
+  'Vendor',
+  'Sizes in inventory',
+  'Store code',
+  'MSRP (strikethrough)',
+  'Sale price',
+  'Barcode',
+  'Item #',
+]
+
+const SHOES_STOCK_FIELDS = [
+  'Item name',
+  'Size',
+  'Store code',
+  'Color',
+  'Price',
+  'Barcode',
+  'Item #',
+]
+
 export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
   {
     id: 'dress-classic',
     department: 'Dress',
-    name: 'Stock label',
+    name: 'Dress — stock',
     description:
       'Variants top-left, MSRP struck + sale price bottom-left; size/color, barcode, and item # on the right.',
-    fields: STOCK_FIELDS,
+    fields: DRESS_FIELDS,
     status: 'client',
+    previewImage: 'tags/dress.png',
   },
   {
-    id: 'dress-minimal',
-    department: 'Dress',
-    name: 'Stock label (Dress alt)',
-    description: 'Same stock layout as Dress — Classic.',
-    fields: STOCK_FIELDS,
-    status: 'client',
-  },
-  {
-    id: 'shoes-standard',
+    id: 'shoes-tag',
     department: 'Shoes',
-    name: 'Stock label',
-    description: 'Same six-region stock layout used for dresses.',
-    fields: STOCK_FIELDS,
+    name: 'Shoes',
+    description:
+      'Name and size on top, vendor, sizes in inventory, struck MSRP, boxed sale price, barcode on the right.',
+    fields: SHOES_FIELDS,
     status: 'client',
+    previewImage: 'tags/shoes.png',
   },
   {
-    id: 'jewelry-standard',
-    department: 'Jewelry',
-    name: 'Stock label',
-    description: 'Same six-region stock layout used for dresses.',
-    fields: STOCK_FIELDS,
+    id: 'shoes-stock',
+    department: 'Shoes',
+    name: 'Shoes — stock',
+    description: 'Stacked name, size, store code, and color with a boxed price and barcode.',
+    fields: SHOES_STOCK_FIELDS,
     status: 'client',
+    previewImage: 'tags/shoes-stock.png',
+  },
+  {
+    id: 'jewelry-tag',
+    department: 'Jewelry',
+    name: 'Jewelry',
+    description: 'Name and color on top, struck MSRP, boxed sale price, barcode and item # on the right.',
+    fields: JEWELRY_FIELDS,
+    status: 'client',
+    previewImage: 'tags/jewelry.png',
   },
 ]
 
 const DEFAULT_BY_DEPARTMENT: Record<Department, string> = {
   Dress: 'dress-classic',
-  Shoes: 'shoes-standard',
-  Jewelry: 'jewelry-standard',
+  Shoes: 'shoes-tag',
+  Jewelry: 'jewelry-tag',
 }
 
 export function listLabelStyleLayouts(): LabelStyleLayout[] {
@@ -84,17 +119,40 @@ export function getDefaultLayoutIdForDepartment(department: Department): string 
   return DEFAULT_BY_DEPARTMENT[department] ?? DEFAULT_BY_DEPARTMENT.Dress
 }
 
+const LEGACY_LAYOUT_IDS: Record<string, string> = {
+  'dress-minimal': 'dress-classic',
+  'shoes-standard': 'shoes-tag',
+  'jewelry-standard': 'jewelry-tag',
+}
+
+/** Map saved picker values onto current layout ids. */
+export function migrateStyleLayoutId(id: string | undefined): string {
+  if (!id) return AUTO_STYLE_LAYOUT_ID
+  if (id === AUTO_STYLE_LAYOUT_ID) return id
+  const next = LEGACY_LAYOUT_IDS[id] ?? id
+  return getLabelStyleLayout(next) ? next : AUTO_STYLE_LAYOUT_ID
+}
+
+/** Layouts used when Design is Auto (one per department). */
+export function autoDepartmentLayouts(): LabelStyleLayout[] {
+  const layouts: LabelStyleLayout[] = []
+  for (const dept of DEPARTMENTS) {
+    const layout = getLabelStyleLayout(DEFAULT_BY_DEPARTMENT[dept])
+    if (layout) layouts.push(layout)
+  }
+  return layouts
+}
+
 /** Resolve which drawer to use for one label. */
 export function resolveStyleLayoutId(
   selection: string,
   lineDepartment: Department,
 ): string {
-  if (selection === AUTO_STYLE_LAYOUT_ID) {
+  const resolved = migrateStyleLayoutId(selection)
+  if (resolved === AUTO_STYLE_LAYOUT_ID) {
     return getDefaultLayoutIdForDepartment(lineDepartment)
   }
-  const layout = getLabelStyleLayout(selection)
-  if (layout) return layout.id
-  return getDefaultLayoutIdForDepartment(lineDepartment)
+  return resolved
 }
 
 export function layoutOptionsForDropdown(): Array<{
@@ -123,9 +181,14 @@ export function layoutOptionsForDropdown(): Array<{
 
 export function describeLayoutSelection(selection: string): string {
   if (selection === AUTO_STYLE_LAYOUT_ID) {
-    return 'Each label uses the default layout for its line department (Dress, Shoes, or Jewelry).'
+    return 'Each label uses the tag for its department: Dress stock, Shoes, or Jewelry.'
   }
   const layout = getLabelStyleLayout(selection)
   if (!layout) return ''
   return layout.description
+}
+
+export function tagPreviewUrl(path: string | undefined): string {
+  if (!path) return ''
+  return chrome.runtime.getURL(path)
 }

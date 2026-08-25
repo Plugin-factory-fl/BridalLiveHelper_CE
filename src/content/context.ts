@@ -8,9 +8,7 @@ const SCREEN_LABELS: Record<BridalLiveScreen, string> = {
   unknown: 'BridalLive',
 }
 
-export function detectContext(
-  devOverride: BridalLiveScreen | null = null,
-): BridalLiveContext {
+export function detectContext(): BridalLiveContext {
   const url = location.href
   const pathname = location.pathname.toLowerCase()
   const hash = location.hash.toLowerCase()
@@ -19,10 +17,7 @@ export function detectContext(
   let screen: BridalLiveScreen = 'unknown'
   const hints: string[] = []
 
-  if (devOverride) {
-    screen = devOverride
-    hints.push('Home is using the practice screen chosen in Settings.')
-  } else if (matchesReceiving(combined)) {
+  if (matchesReceiving(combined)) {
     screen = 'receiving'
     hints.push('Open Labels to print from this receiving voucher.')
   } else if (matchesOrder(combined)) {
@@ -34,8 +29,7 @@ export function detectContext(
     hints.push('Open a sale, receiving voucher, or inventory page for the most helpful shortcuts.')
   }
 
-  const orderLine =
-    screen === 'order' || devOverride === 'order' ? readOrderLineHints() ?? undefined : undefined
+  const orderLine = screen === 'order' ? readOrderLineHints() ?? undefined : undefined
 
   if (screen === 'order' && orderLine) {
     hints.push('Search can be filled in from the line you are working.')
@@ -79,10 +73,4 @@ function matchesInventory(text: string): boolean {
     /\bitems?\b/.test(text) ||
     /product/.test(text)
   )
-}
-
-export function parseDevScreenOverride(value: string | null): BridalLiveScreen | null {
-  if (!value) return null
-  const allowed: BridalLiveScreen[] = ['order', 'receiving', 'inventory', 'unknown']
-  return allowed.includes(value as BridalLiveScreen) ? (value as BridalLiveScreen) : null
 }

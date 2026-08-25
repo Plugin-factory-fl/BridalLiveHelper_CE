@@ -22,16 +22,21 @@ When a receiving voucher is open:
 
 If you are not on a receiving screen, you can still pick a voucher from the list after the stores are connected.
 
-## Inventory in BridalLive
+## Mass labeling
+
+On **Labels → Mass Labeling**, upload a BridalLive inventory spreadsheet (.xlsx or .csv). Click the first empty label, then the last one to fill on that sheet. Uncheck rows you do not want. By default, on-hand quantity prints that many copies.
+
+## Reprint
 
 Use the Helper to look up an item # and **reprint** its label with current price, size, color, and barcode.
 
 ## Printing
 
-Labels print on **Avery 5160** sheets.
+Receiving and reprint labels print on **Avery 5160** sheets. Choose a **design**, or leave it on auto so dress, shoes, and jewelry each use their layout. Mass labeling uses BridalLive’s default product-tag layout from the spreadsheet.
 
-1. Choose a **design**, or leave it on auto so dress, shoes, and jewelry each use their layout.
-2. If the sheet is partly used, click the **first empty label**. Printing fills left to right, top to bottom from there.
-3. Print at **100%** scale. Do not use “Fit to page.”
+If the sheet is partly used:
 
-A print preview opens in a new Chrome tab.
+- **Receiving / reprint:** click the first empty label. Printing fills left to right from there.
+- **Mass labeling:** click the first empty label, then the last one to fill on that sheet.
+
+Print at **100%** scale. Do not use “Fit to page.” A print preview opens in a new Chrome tab.

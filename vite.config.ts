@@ -4,7 +4,13 @@ import manifest from './manifest.config'
 
 export default defineConfig({
   plugins: [crx({ manifest })],
+  optimizeDeps: {
+    include: ['exceljs', 'papaparse'],
+  },
   build: {
+    commonjsOptions: {
+      include: [/exceljs/, /node_modules/],
+    },
     rollupOptions: {
       input: {
         panel: 'src/panel/index.html',

@@ -32,11 +32,56 @@ export function labelsPerPage(sheet: AverySheetSpec): number {
   return sheet.columns * sheet.rows
 }
 
-export function pageCountForLabels(labelCount: number, sheet: AverySheetSpec, startIndex = 0): number {
-  const capacityFirstPage = labelsPerPage(sheet) - startIndex
-  if (labelCount <= capacityFirstPage) return 1
-  const remaining = labelCount - capacityFirstPage
+export function pageCountForLabels(
+  labelCount: number,
+  sheet: AverySheetSpec,
+  startIndex = 0,
+  endIndex?: number,
+): number {
+  if (labelCount <= 0) return 0
+  if (endIndex == null) {
+    const capacityFirstPage = labelsPerPage(sheet) - startIndex
+    if (labelCount <= capacityFirstPage) return 1
+    const remaining = labelCount - capacityFirstPage
+    return 1 + Math.ceil(remaining / labelsPerPage(sheet))
+  }
+  const firstPageSlots = Math.max(1, endIndex - startIndex + 1)
+  if (labelCount <= firstPageSlots) return 1
+  const remaining = labelCount - firstPageSlots
   return 1 + Math.ceil(remaining / labelsPerPage(sheet))
+}
+
+export function clampRange(
+  sheet: AverySheetSpec,
+  startRow: number,
+  startCol: number,
+  endRow: number,
+  endCol: number,
+): {
+  startIndex: number
+  endIndex: number
+  startRow: number
+  startCol: number
+  endRow: number
+  endCol: number
+} {
+  let startIndex = startSlotIndex(sheet, startRow, startCol)
+  let endIndex = startSlotIndex(sheet, endRow, endCol)
+  if (endIndex < startIndex) {
+    const tmp = startIndex
+    startIndex = endIndex
+    endIndex = tmp
+  }
+  const start = allGridSlots(sheet)[startIndex]!
+  const end = allGridSlots(sheet)[endIndex]!
+  return {
+    startIndex,
+    endIndex,
+    startRow: start.row,
+    startCol: start.col,
+    endRow: end.row,
+    endCol: end.col,
+  }
 }
 
 export function allGridSlots(sheet: AverySheetSpec): GridSlot[] {

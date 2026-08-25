@@ -11,7 +11,7 @@ import { addInventoryItemToPosTransaction } from '../lib/bridallive-pos'
 import { getActiveBridalLiveCredentials } from '../lib/bridallive-credentials'
 import { MSG, type ExtensionMessage, type ExtensionResponse } from '../lib/messages'
 import { loadPreferences } from '../lib/storage'
-import { detectContext, parseDevScreenOverride } from './context'
+import { detectContext } from './context'
 import { log, warn } from '../lib/log'
 
 let latestContext = detectContext()
@@ -22,11 +22,7 @@ export function getLatestContext() {
 
 export function refreshContext(): typeof latestContext {
   latestContext = detectContext()
-  void loadPreferences().then((prefs) => {
-    const override = parseDevScreenOverride(prefs.devScreenOverride)
-    latestContext = detectContext(override)
-    broadcastContext()
-  })
+  broadcastContext()
   return latestContext
 }
 

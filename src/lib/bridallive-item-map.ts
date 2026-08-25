@@ -79,6 +79,7 @@ export function mapBridalLiveItem(
     itemNumber,
     style,
     vendorItemName: (item.vendorItemName ?? '').trim() || style,
+    description: (item.description ?? '').trim() || undefined,
     vendor,
     saleSearchQuery: buildSaleSearchQuery(vendor, itemNumber),
     department: mapDepartmentName(item),

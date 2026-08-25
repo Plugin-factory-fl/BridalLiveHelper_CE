@@ -5,6 +5,7 @@ import type { LabelLineItem } from '../api/types'
 import type { LabelPayload } from './types'
 import { resolveStyleLayoutId } from './style-layouts'
 import { getTemplateForDepartment } from './templates'
+import { locationShorthand } from '../lib/location-code'
 
 function guessDepartment(itemNumber: string): Department {
   const upper = itemNumber.toUpperCase()
@@ -35,6 +36,33 @@ function formatMoney(amount: number | undefined): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`
+}
+
+function sameKey(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+function looksLikeItemNumber(value: string, itemNumber: string): boolean {
+  const text = value.trim()
+  if (!text || !itemNumber.trim()) return !text
+  if (sameKey(text, itemNumber)) return true
+  return sameKey(text.replace(/^#\s*/, ''), itemNumber)
+}
+
+function isVariantList(value: string): boolean {
+  const text = value.trim()
+  return /^(colors?|sizes?)\s*:/i.test(text) || /\|\s*sizes?\s*:/i.test(text)
+}
+
+/** Prefer a real product name over the item # / vendor SKU. */
+function pickDescriptiveName(
+  itemNumber: string,
+  candidates: Array<string | undefined>,
+): string {
+  const cleaned = candidates.map((c) => (c ?? '').trim()).filter(Boolean)
+  const named = cleaned.find((c) => !looksLikeItemNumber(c, itemNumber) && !isVariantList(c))
+  if (named) return named
+  return cleaned[0] || itemNumber
 }
 
 function findCatalogMatch(
@@ -91,6 +119,26 @@ function collectVariantColors(
   return chosenColor && chosenColor !== '—' ? [chosenColor] : []
 }
 
+function collectVariantSizes(
+  match: InventoryItem | undefined,
+  catalog: InventoryItem[],
+  chosenSize: string,
+): string[] {
+  if (!match) {
+    return chosenSize && chosenSize !== '—' ? [chosenSize] : []
+  }
+  const fromSiblings = [
+    ...new Set(
+      catalog
+        .filter((i) => i.style.toLowerCase() === match.style.toLowerCase())
+        .map((i) => i.size)
+        .filter((s) => s && s !== '—'),
+    ),
+  ]
+  if (fromSiblings.length) return fromSiblings
+  return chosenSize && chosenSize !== '—' ? [chosenSize] : []
+}
+
 export function enrichFromCatalog(
   line: LabelLineItem,
   catalog: InventoryItem[],
@@ -105,22 +153,34 @@ export function enrichFromCatalog(
   const styleLayoutId = resolveStyleLayoutId(options.styleLayoutSelection, department)
   const itemNumber = match?.itemNumber ?? line.itemNumber.trim()
   const color = line.color ?? match?.color ?? '—'
+  const size = line.size ?? match?.size ?? '—'
   const retail = line.retailPrice ?? match?.retailPrice
   const sale = line.salePrice ?? match?.salePrice
   const msrp = formatMoney(retail)
   const salePrice = formatMoney(sale != null && sale > 0 ? sale : retail)
 
+  const itemName = pickDescriptiveName(itemNumber, [
+    match?.description,
+    line.style,
+    match?.style,
+    line.vendorItemName,
+    match?.vendorItemName,
+  ])
+
   return {
     itemNumber,
     style: line.style ?? match?.style ?? 'Unknown style',
+    itemName,
     vendor: match?.vendor ?? 'Unknown vendor',
     department,
-    size: line.size ?? match?.size ?? '—',
+    size,
     color,
     price: salePrice,
     msrp,
     salePrice,
     variantColors: collectVariantColors(match, catalog, color),
+    availableSizes: collectVariantSizes(match, catalog, size),
+    locationCode: locationShorthand(match?.locationName ?? ''),
     barcodeValue: itemNumber,
     styleLayoutId,
   }

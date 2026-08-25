@@ -14,7 +14,6 @@ import { AVERY_5160 } from '../../labels/templates'
 import {
   AUTO_STYLE_LAYOUT_ID,
   autoDepartmentLayouts,
-  describeLayoutSelection,
   getLabelStyleLayout,
   layoutOptionsForDropdown,
   tagPreviewUrl,
@@ -57,7 +56,7 @@ function buildStyleLayoutOptions(): string {
         `<optgroup label="${escapeHtml(group)}">${opts
           .map(
             (o) =>
-              `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`,
+              `<option value="${escapeHtml(o.value)}"${o.value === AUTO_STYLE_LAYOUT_ID ? ' selected' : ''}>${escapeHtml(o.label)}</option>`,
           )
           .join('')}</optgroup>`,
     )
@@ -235,26 +234,22 @@ export const renderLabels: ViewRender = (root) => {
     })
   }
 
-  const layoutThumb = (layout: ReturnType<typeof getLabelStyleLayout>, caption: string) => {
+  const layoutThumb = (layout: ReturnType<typeof getLabelStyleLayout>) => {
     if (!layout) return ''
     const src = layout.previewImage ? tagPreviewUrl(layout.previewImage) : ''
     const img = src
       ? `<img class="label-style-preview-img" src="${escapeHtml(src)}" alt="${escapeHtml(layout.name)} tag" />`
-      : `<div class="label-style-preview-placeholder">${escapeHtml(layout.name)}</div>`
-    return `<figure class="label-style-preview-figure">${img}<figcaption>${escapeHtml(caption)}</figcaption></figure>`
+      : `<div class="label-style-preview-placeholder" aria-hidden="true"></div>`
+    return `<figure class="label-style-preview-figure">${img}</figure>`
   }
 
   const paintStylePreview = () => {
     const selection = labelStyleLayoutId
     if (selection === AUTO_STYLE_LAYOUT_ID) {
-      const thumbs = autoDepartmentLayouts()
-        .map((layout) => layoutThumb(layout, `${layout.department} → ${layout.name}`))
-        .join('')
+      const thumbs = autoDepartmentLayouts().map((layout) => layoutThumb(layout)).join('')
       stylePreview.innerHTML = `
-        <p class="label-style-preview-title">Auto by department</p>
-        <p class="label-style-preview-desc">${escapeHtml(describeLayoutSelection(selection))}</p>
+        <p class="label-style-preview-title">Label Preview</p>
         <div class="label-style-preview-thumbs">${thumbs}</div>
-        <p class="label-style-preview-note muted small">Best when a voucher mixes dresses, shoes, and jewelry. Pick a design above to use one layout for every label.</p>
       `
       return
     }
@@ -270,16 +265,8 @@ export const renderLabels: ViewRender = (root) => {
       : ''
 
     stylePreview.innerHTML = `
-      <div class="label-style-preview-header">
-        <p class="label-style-preview-title">${escapeHtml(layout.name)}</p>
-        <span class="tag">${escapeHtml(layout.department)}</span>
-      </div>
-      <p class="label-style-preview-desc">${escapeHtml(layout.description)}</p>
+      <p class="label-style-preview-title">Label Preview</p>
       ${mockup}
-      <p class="label-style-preview-fields-label">Fields on the label</p>
-      <ul class="label-style-preview-fields">
-        ${layout.fields.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}
-      </ul>
     `
   }
 
@@ -340,7 +327,7 @@ export const renderLabels: ViewRender = (root) => {
     const saved = await loadLabelsUiState()
     startRow = saved.startRow
     startCol = saved.startCol
-    labelStyleLayoutId = saved.labelStyleLayoutId ?? AUTO_STYLE_LAYOUT_ID
+    labelStyleLayoutId = AUTO_STYLE_LAYOUT_ID
     activeSubTab = saved.activeSubTab ?? 'receiving'
     selectionByItem = { ...saved.receivingSelected }
     receivingLocationId = saved.receivingLocationId
@@ -355,9 +342,9 @@ export const renderLabels: ViewRender = (root) => {
     if (itemInput) itemInput.value = saved.reprintItemNumber
     if (qtyInput) qtyInput.value = String(saved.reprintQuantity)
 
-    if (saved.statusText) {
+    if (saved.statusText && saved.statusKind === 'error') {
       statusEl.textContent = saved.statusText
-      statusEl.className = saved.statusKind ? `status ${saved.statusKind}` : 'status'
+      statusEl.className = 'status error'
     }
 
     if (scrollRoot && saved.scrollTop > 0) {
@@ -550,7 +537,7 @@ export const renderLabels: ViewRender = (root) => {
         items,
         fallbackDepartment: reprintFallbackDepartment(),
       })
-      setStatus(result.message, result.ok ? 'success' : 'error')
+      setStatus(result.ok ? '' : result.message, result.ok ? '' : 'error')
     } catch (e) {
       setStatus(e instanceof Error ? e.message : 'Could not print these labels', 'error')
     }

@@ -11,7 +11,6 @@ export type StoredPreferences = {
   panelWidth: number
   activeView: ActiveView
   mockStoreId: string
-  devScreenOverride: string | null
   fontSize: FontSizePreference
 }
 
@@ -20,7 +19,6 @@ const DEFAULTS: StoredPreferences = {
   panelWidth: PANEL_DEFAULT_WIDTH,
   activeView: 'home',
   mockStoreId: 'store-1',
-  devScreenOverride: null,
   fontSize: 'small',
 }
 
@@ -41,7 +39,6 @@ export async function loadPreferences(): Promise<StoredPreferences> {
     panelWidth: Number(data[STORAGE_KEYS.panelWidth]) || DEFAULTS.panelWidth,
     activeView: (data[STORAGE_KEYS.activeView] as ActiveView) ?? DEFAULTS.activeView,
     mockStoreId: String(data[STORAGE_KEYS.mockStoreId] ?? DEFAULTS.mockStoreId),
-    devScreenOverride: data[STORAGE_KEYS.devScreenOverride] ?? null,
     fontSize: parseFontSize(data[STORAGE_KEYS.fontSize]),
   }
 }
@@ -54,9 +51,6 @@ export async function savePreferences(
   if (patch.panelWidth !== undefined) next[STORAGE_KEYS.panelWidth] = patch.panelWidth
   if (patch.activeView !== undefined) next[STORAGE_KEYS.activeView] = patch.activeView
   if (patch.mockStoreId !== undefined) next[STORAGE_KEYS.mockStoreId] = patch.mockStoreId
-  if (patch.devScreenOverride !== undefined) {
-    next[STORAGE_KEYS.devScreenOverride] = patch.devScreenOverride
-  }
   if (patch.fontSize !== undefined) {
     next[STORAGE_KEYS.fontSize] = parseFontSize(patch.fontSize)
   }

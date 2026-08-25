@@ -3,6 +3,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createUserStore } from './users.mjs'
 
 const rootDir = path.dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
 for (const name of ['.env', '.env.example']) {
@@ -21,23 +22,13 @@ for (const name of ['.env', '.env.example']) {
 }
 
 const PORT = Number(process.env.PORT) || 8787
-
-/** email:password:Display Name,email2:password2:Name2 */
-function parseUsers() {
-  const raw = process.env.HELPER_USERS ?? ''
-  const users = new Map()
-  for (const part of raw.split(',').map((s) => s.trim()).filter(Boolean)) {
-    const [email, password, ...nameParts] = part.split(':')
-    if (!email || !password) continue
-    users.set(email.trim().toLowerCase(), {
-      password,
-      displayName: nameParts.join(':').trim() || email,
-    })
-  }
-  return users
-}
-
-const USERS = parseUsers()
+const DATA_DIR = process.env.HELPER_DATA_DIR || path.join(rootDir, 'data')
+const userStore = createUserStore({
+  dataDir: DATA_DIR,
+  envUsersRaw: process.env.HELPER_USERS ?? '',
+  signupCode: process.env.HELPER_SIGNUP_CODE ?? '',
+  signupEnabled: process.env.HELPER_SIGNUP_DISABLED !== '1',
+})
 
 const LOCATIONS = [
   { id: 'white-plains', name: 'White Plains' },
@@ -102,7 +93,7 @@ function locationSecrets(locationId) {
 }
 
 function publicSession(token, record) {
-  const user = USERS.get(record.email)
+  const user = userStore.get(record.email)
   const secrets = locationSecrets(record.locationId)
   const environment = process.env.BL_ENVIRONMENT === 'qa' ? 'qa' : 'production'
   const ready = Boolean(secrets.retailerId && secrets.apiKey)
@@ -124,6 +115,14 @@ function publicSession(token, record) {
   }
 }
 
+function startSession(email, locationId) {
+  const token = crypto.randomUUID()
+  const requested = String(locationId ?? '')
+  const resolved = LOCATIONS.some((l) => l.id === requested) ? requested : 'poughkeepsie'
+  sessions.set(token, { email, locationId: resolved })
+  return publicSession(token, { email, locationId: resolved })
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://127.0.0.1:${PORT}`)
 
@@ -138,22 +137,37 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
+    if (req.method === 'GET' && url.pathname === '/auth/signup-config') {
+      send(res, 200, userStore.signupConfig())
+      return
+    }
+
     if (req.method === 'POST' && url.pathname === '/auth/login') {
       const body = await readBody(req)
       const email = String(body.email ?? '').trim().toLowerCase()
       const password = String(body.password ?? '')
-      const user = USERS.get(email)
-      if (!user || user.password !== password) {
+      const user = userStore.authenticate(email, password)
+      if (!user) {
         send(res, 401, { message: 'Could not sign in. Check your email and password.' })
         return
       }
-      const token = crypto.randomUUID()
-      const requested = String(body.locationId ?? '')
-      const locationId = LOCATIONS.some((l) => l.id === requested)
-        ? requested
-        : 'poughkeepsie'
-      sessions.set(token, { email, locationId })
-      send(res, 200, publicSession(token, { email, locationId }))
+      send(res, 200, startSession(user.email, body.locationId))
+      return
+    }
+
+    if (req.method === 'POST' && url.pathname === '/auth/register') {
+      const body = await readBody(req)
+      const result = userStore.register({
+        email: body.email,
+        password: body.password,
+        displayName: body.displayName,
+        signupCode: body.signupCode,
+      })
+      if (!result.ok) {
+        send(res, result.status, { message: result.message })
+        return
+      }
+      send(res, 201, startSession(result.user.email, body.locationId))
       return
     }
 
@@ -205,9 +219,11 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, () => {
-  const userCount = USERS.size
   const secretsReady = Object.values(LOCATION_SECRETS).every((s) => s.retailerId && s.apiKey)
   console.log(`Helper API http://127.0.0.1:${PORT}`)
-  console.log(`  users: ${userCount} (set HELPER_USERS)`)
+  console.log(`  users: ${userStore.count()} (file ${path.join(DATA_DIR, 'helper-users.json')}; HELPER_USERS seeds new emails)`)
+  console.log(
+    `  signup: ${userStore.signupConfig().enabled ? (userStore.signupConfig().codeRequired ? 'open with shop code' : 'open') : 'disabled'}`,
+  )
   console.log(`  BridalLive location keys: ${secretsReady ? 'loaded' : 'missing in env (not sent to the extension)'}`)
 })

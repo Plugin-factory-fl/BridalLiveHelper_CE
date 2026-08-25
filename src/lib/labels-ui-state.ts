@@ -1,7 +1,7 @@
 import { STORAGE_KEYS } from './config'
 import { AUTO_STYLE_LAYOUT_ID } from '../labels/style-layouts'
 
-export const LABELS_SUB_TABS = ['receiving', 'mass', 'reprint'] as const
+export const LABELS_SUB_TABS = ['receiving', 'reprint', 'mass'] as const
 export type LabelsSubTab = (typeof LABELS_SUB_TABS)[number]
 
 export type LabelsUiState = {
@@ -50,6 +50,7 @@ export async function loadLabelsUiState(): Promise<LabelsUiState> {
     ...raw,
     receivingSelected: raw.receivingSelected ?? {},
     reprintItemNumber: raw.reprintItemNumber || raw.reprintVendorItemName || '',
+    labelStyleLayoutId: AUTO_STYLE_LAYOUT_ID,
     activeSubTab,
   }
 }

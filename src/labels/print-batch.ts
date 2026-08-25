@@ -1,10 +1,6 @@
 import type { LabelPrintBatchRequest } from '../api/types'
 import { resolveDataSource } from '../lib/data-source'
-import {
-  AUTO_STYLE_LAYOUT_ID,
-  describeLayoutSelection,
-  getLabelStyleLayout,
-} from './style-layouts'
+import { AUTO_STYLE_LAYOUT_ID } from './style-layouts'
 import { expandLabelLines } from './enrich'
 import { loadCatalogForLabelPrint } from './lookup'
 import { pageCountForLabels } from './layout'
@@ -77,28 +73,13 @@ export async function printLabelBatch(
 
   const openResult = await openPdfInNewTab(pdfBytes)
 
-  const mode =
-    source === 'mock'
-      ? 'Print at 100% scale — do not use Fit to page.'
-      : 'Prices and sizes loaded from BridalLive. Print at 100% scale — do not use Fit to page.'
-
-  const layoutHint =
-    styleLayoutId === AUTO_STYLE_LAYOUT_ID
-      ? describeLayoutSelection(styleLayoutId)
-      : (getLabelStyleLayout(styleLayoutId)?.name ?? '')
-
-  const sample = labels[0]
-  const detailHint = sample
-    ? ` ${sample.itemNumber} · ${sample.size}/${sample.color} · ${sample.salePrice}.`
-    : ''
-
   return {
     ok: true,
     labelCount: labels.length,
     pageCount,
     pdfOpened: openResult.ok,
     message: openResult.ok
-      ? `Generated ${labels.length} label(s) on ${pageCount} page(s).${detailHint} ${layoutHint} ${mode}`
+      ? ''
       : `Generated PDF (${labels.length} labels) but could not open tab: ${openResult.error}`,
   }
 }

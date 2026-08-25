@@ -71,7 +71,6 @@ export const STORAGE_KEYS = {
   panelWidth: 'panelWidth',
   activeView: 'activeView',
   mockStoreId: 'mockStoreId',
-  devScreenOverride: 'devScreenOverride',
   fontSize: 'fontSize',
   labelsUiState: 'labelsUiState',
   inventoryUiState: 'inventoryUiState',

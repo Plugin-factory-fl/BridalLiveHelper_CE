@@ -5,6 +5,8 @@ import type { LabelLineItem, LabelTemplate } from '../api/types'
 export type LabelPayload = {
   itemNumber: string
   style: string
+  /** Descriptive name printed on jewelry/shoes tags (not the item #). */
+  itemName: string
   vendor: string
   department: Department
   size: string
@@ -15,8 +17,12 @@ export type LabelPayload = {
   msrp: string
   /** Sale price, formatted for display (e.g. "$89.99"). */
   salePrice: string
-  /** All available colors/variants for this style (top-left of stock label). */
+  /** All available colors / variants for this style (top-left of stock label). */
   variantColors: string[]
+  /** Sibling sizes for this style (shoes tag). */
+  availableSizes: string[]
+  /** Store code printed on tags (e.g. WP, PK). */
+  locationCode: string
   /** Value encoded in the barcode (item number). */
   barcodeValue: string
   /** Resolved drawer id from `style-layouts.ts`. */

@@ -27,6 +27,8 @@ export type InventoryItem = {
   style: string
   /** BridalLive Vendor Item Name (private labeling; often differs from Item Name). */
   vendorItemName: string
+  /** BridalLive Description — used as the printed name when Item Name is just the item #. */
+  description?: string
   vendor: string
   /** Exact sale-search string (vendor code + item number) for BL typeahead. */
   saleSearchQuery: string

@@ -134,6 +134,47 @@ type LoginResponse = {
   bridalLive?: BridalLiveFromServer | null
 }
 
+async function applyLoginResponse(data: LoginResponse, fallbackLocationId: string): Promise<HelperSession> {
+  const session: HelperSession = {
+    token: data.token,
+    user: data.user,
+    locationId: data.locationId || fallbackLocationId,
+  }
+  await applyWorkingLocation(session.locationId, data.bridalLive)
+  await saveHelperSession(session)
+  return session
+}
+
+function requireApi(): string {
+  if (!API_BASE_URL) {
+    throw new Error(
+      'The Helper server is not connected yet. Ask Alex to turn it on — BridalLive keys stay on the server, not in this panel.',
+    )
+  }
+  return API_BASE_URL
+}
+
+export type HelperSignupConfig = {
+  enabled: boolean
+  codeRequired: boolean
+}
+
+export async function loadSignupConfig(): Promise<HelperSignupConfig> {
+  const base = API_BASE_URL
+  if (!base) return { enabled: false, codeRequired: false }
+  try {
+    const res = await fetch(`${base}/auth/signup-config`)
+    if (!res.ok) return { enabled: true, codeRequired: false }
+    const data = (await res.json()) as Partial<HelperSignupConfig>
+    return {
+      enabled: data.enabled !== false,
+      codeRequired: Boolean(data.codeRequired),
+    }
+  } catch {
+    return { enabled: true, codeRequired: false }
+  }
+}
+
 export async function helperLogin(
   email: string,
   password: string,
@@ -145,13 +186,9 @@ export async function helperLogin(
   if (!trimmed || !password) {
     throw new Error('Enter your email and password.')
   }
-  if (!API_BASE_URL) {
-    throw new Error(
-      'The Helper server is not connected yet. Ask Alex to turn it on — BridalLive keys stay on the server, not in this panel.',
-    )
-  }
+  const base = requireApi()
 
-  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+  const res = await fetch(`${base}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: trimmed, password, locationId: shopId }),
@@ -161,14 +198,47 @@ export async function helperLogin(
     throw new Error(body.message ?? 'Could not sign in. Check your email and password.')
   }
   const data = (await res.json()) as LoginResponse
-  const session: HelperSession = {
-    token: data.token,
-    user: data.user,
-    locationId: data.locationId || shopId,
+  return applyLoginResponse(data, shopId)
+}
+
+export async function helperRegister(input: {
+  email: string
+  password: string
+  displayName: string
+  locationId: string
+  signupCode?: string
+}): Promise<HelperSession> {
+  const trimmed = input.email.trim().toLowerCase()
+  const name = input.displayName.trim()
+  const shopId = HELPER_LOCATIONS.some((l) => l.id === input.locationId)
+    ? input.locationId
+    : HELPER_LOCATIONS[0]!.id
+  if (!name) throw new Error('Enter your name.')
+  if (!trimmed || !input.password) {
+    throw new Error('Enter your email and a password.')
   }
-  await applyWorkingLocation(session.locationId, data.bridalLive)
-  await saveHelperSession(session)
-  return session
+  if (input.password.length < 8) {
+    throw new Error('Use a password with at least 8 characters.')
+  }
+  const base = requireApi()
+
+  const res = await fetch(`${base}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: trimmed,
+      password: input.password,
+      displayName: name,
+      locationId: shopId,
+      signupCode: input.signupCode?.trim() || undefined,
+    }),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string }
+    throw new Error(body.message ?? 'Could not create the account.')
+  }
+  const data = (await res.json()) as LoginResponse
+  return applyLoginResponse(data, shopId)
 }
 
 export async function helperLogout(): Promise<void> {

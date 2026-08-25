@@ -44,6 +44,8 @@ export type BarcodeDrawOptions = {
   y: number
   width: number
   height: number
+  /** Modules of blank space on each side. Default 10. */
+  quietModules?: number
   /** Draw black bars via callback (pdf-lib rectangles). */
   fillRect: (x: number, y: number, w: number, h: number) => void
 }
@@ -60,7 +62,7 @@ export function drawCode128Barcode(text: string, opts: BarcodeDrawOptions): void
     for (const d of pat) modules += Number(d)
   }
   // Quiet zone ~10 modules each side
-  const quiet = 10
+  const quiet = opts.quietModules ?? 10
   modules += quiet * 2
   const moduleW = opts.width / modules
   let cursor = opts.x + quiet * moduleW

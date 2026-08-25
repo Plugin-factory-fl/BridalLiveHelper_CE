@@ -39,21 +39,6 @@ export const renderSettings: ViewRender = (root) => {
         <p class="muted small">Choose which columns appear in search results. Drag a column edge in the table to resize.</p>
         <div class="inv-column-toggles" id="blh-inv-column-toggles"></div>
       </fieldset>
-      <details class="practice-options" id="blh-practice-options">
-        <summary>Practice options</summary>
-        <p class="muted small">
-          Use this only for training, when you want Home and banners to treat BridalLive as a different screen.
-        </p>
-        <label>Treat this screen as
-          <select name="devScreenOverride" id="blh-dev-screen">
-            <option value="">Follow BridalLive</option>
-            <option value="order">Sale / order</option>
-            <option value="receiving">Receiving</option>
-            <option value="inventory">Inventory</option>
-            <option value="unknown">Other</option>
-          </select>
-        </label>
-      </details>
       <button type="submit" class="btn btn-primary">Save</button>
     </form>
     <p id="blh-settings-status" class="status" role="status"></p>
@@ -71,11 +56,7 @@ export const renderSettings: ViewRender = (root) => {
   })
 
   void loadPreferences().then((prefs) => {
-    const dev = section.querySelector('#blh-dev-screen') as HTMLSelectElement
-    dev.value = prefs.devScreenOverride ?? ''
     fontSizeSelect.value = prefs.fontSize
-    const practice = section.querySelector('#blh-practice-options') as HTMLDetailsElement | null
-    if (practice && prefs.devScreenOverride) practice.open = true
   })
 
   fontSizeSelect.addEventListener('change', () => {
@@ -107,7 +88,6 @@ export const renderSettings: ViewRender = (root) => {
     }
 
     await savePreferences({
-      devScreenOverride: String(fd.get('devScreenOverride') ?? '') || null,
       fontSize: String(fd.get('fontSize') || 'small') as FontSizePreference,
     })
     applyFontSizePreference(String(fd.get('fontSize') || 'small') as FontSizePreference)
