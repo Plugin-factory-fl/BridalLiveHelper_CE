@@ -48,9 +48,12 @@ export function isHelperPrintPreviewUrl(url: string): boolean {
   }
 }
 
-/** Future Render API base; empty in foundation uses mock client. */
+/** Helper API on Render. Override with VITE_API_BASE_URL for a local server. */
+export const DEFAULT_HELPER_API_URL = 'https://bridallivehelper-ce.onrender.com'
+
 export const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ??
+  DEFAULT_HELPER_API_URL
 
 /** Chrome PDF viewer open parameter — 100% scale, not fit-to-page. */
 export const PDF_VIEWER_ZOOM = '#zoom=100'

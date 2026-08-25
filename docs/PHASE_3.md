@@ -40,6 +40,8 @@ Until Render hosts this, run the API locally so Home login can succeed:
 
 1. Copy `.env.example` to `.env` and set `HELPER_USERS` plus each location’s BridalLive Retailer ID and API key.
 2. `npm run server` — listens on `http://127.0.0.1:8787`.
-3. Build the extension with `VITE_API_BASE_URL=http://127.0.0.1:8787` so the panel can sign in.
+3. Build with `VITE_API_BASE_URL=http://127.0.0.1:8787` only when you want the panel to hit that local server.
+
+Production builds talk to **https://bridallivehelper-ce.onrender.com** by default.
 
 The server never returns those BridalLive keys to the extension. Staff only send email, password, and a location id.

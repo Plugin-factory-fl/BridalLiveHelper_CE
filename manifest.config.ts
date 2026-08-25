@@ -30,6 +30,7 @@ export default defineManifest({
   host_permissions: [
     'https://app.bridallive.com/*',
     'https://*.bridallive.com/*',
+    'https://bridallivehelper-ce.onrender.com/*',
     'http://localhost:8787/*',
   ],
   content_scripts: [
