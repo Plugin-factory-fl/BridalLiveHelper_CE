@@ -17,7 +17,7 @@ An employee of The Chic Boutique signs in and works. They never see or paste Bri
 
 1. **Login lives on Home.** The Home tab is where staff sign in and sign out.
 2. **Working location.** After login, the employee picks **which location they are working at** (White Plains or Poughkeepsie) and can switch when they move between shops.
-3. **Settings is only a location picker** for store data — not a key vault. Choose the location; inventory and labels follow that shop.
+3. **Settings** is text size and inventory columns — not a key vault. Choose the location on Home; inventory and labels follow that shop.
 4. **The backend holds the BridalLive APIs and IDs** for each location. Every signed-in user gets the right catalog for the location they selected.
 
 The Helper still sits beside BridalLive. Login is for the Helper; staff also stay signed into BridalLive in the main tab.

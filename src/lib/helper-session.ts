@@ -4,7 +4,9 @@ import {
   DEFAULT_BRIDALLIVE_LOCATIONS,
   loadBridalLiveApiSettings,
   saveBridalLiveApiSettings,
+  type BridalLiveApiEnvironment,
 } from './bridallive-credentials'
+import { savePreferences } from './storage'
 
 export type HelperUser = {
   email: string
@@ -20,6 +22,12 @@ export type HelperSession = {
   token: string
   user: HelperUser
   locationId: string
+}
+
+export type BridalLiveFromServer = {
+  retailerId: string
+  apiKey: string
+  environment?: BridalLiveApiEnvironment
 }
 
 export const HELPER_LOCATIONS: HelperLocation[] = DEFAULT_BRIDALLIVE_LOCATIONS.map(
@@ -56,11 +64,37 @@ export async function clearHelperSession(): Promise<void> {
   notifySessionChanged()
 }
 
-async function applyWorkingLocation(locationId: string): Promise<void> {
+export async function getWorkingLocationId(): Promise<string> {
+  const session = await loadHelperSession()
+  if (session?.locationId) return session.locationId
   const settings = await loadBridalLiveApiSettings()
-  if (settings.activeLocationId === locationId) return
+  return settings.activeLocationId || HELPER_LOCATIONS[0]!.id
+}
+
+async function applyWorkingLocation(
+  locationId: string,
+  bridalLive?: BridalLiveFromServer | null,
+): Promise<void> {
+  const settings = await loadBridalLiveApiSettings()
   clearBridalLiveSessions()
-  await saveBridalLiveApiSettings({ ...settings, activeLocationId: locationId })
+  const locations = DEFAULT_BRIDALLIVE_LOCATIONS.map((fallback) => {
+    const existing = settings.locations.find((l) => l.id === fallback.id) ?? fallback
+    if (fallback.id !== locationId || !bridalLive?.retailerId || !bridalLive.apiKey) {
+      return { ...existing, id: fallback.id, name: fallback.name }
+    }
+    return {
+      id: fallback.id,
+      name: fallback.name,
+      retailerId: bridalLive.retailerId,
+      apiKey: bridalLive.apiKey,
+    }
+  })
+  await saveBridalLiveApiSettings({
+    environment: bridalLive?.environment === 'qa' ? 'qa' : 'production',
+    activeLocationId: locationId,
+    locations,
+  })
+  await savePreferences({ mockStoreId: locationId })
 }
 
 export async function setWorkingLocation(locationId: string): Promise<HelperSession | null> {
@@ -68,6 +102,7 @@ export async function setWorkingLocation(locationId: string): Promise<HelperSess
   if (!known) throw new Error('Unknown location.')
 
   const session = await loadHelperSession()
+  let bridalLive: BridalLiveFromServer | null = null
   if (session && API_BASE_URL && session.token) {
     const res = await fetch(`${API_BASE_URL}/auth/location`, {
       method: 'POST',
@@ -81,9 +116,11 @@ export async function setWorkingLocation(locationId: string): Promise<HelperSess
       const body = (await res.json().catch(() => ({}))) as { message?: string }
       throw new Error(body.message ?? 'Could not switch location.')
     }
+    const data = (await res.json()) as { bridalLive?: BridalLiveFromServer | null }
+    bridalLive = data.bridalLive ?? null
   }
 
-  await applyWorkingLocation(locationId)
+  await applyWorkingLocation(locationId, bridalLive)
   if (!session) return null
   const next = { ...session, locationId }
   await saveHelperSession(next)
@@ -94,13 +131,17 @@ type LoginResponse = {
   token: string
   user: HelperUser
   locationId: string
+  bridalLive?: BridalLiveFromServer | null
 }
 
 export async function helperLogin(
   email: string,
   password: string,
+  locationId: string,
 ): Promise<HelperSession> {
   const trimmed = email.trim().toLowerCase()
+  const shopId =
+    HELPER_LOCATIONS.some((l) => l.id === locationId) ? locationId : HELPER_LOCATIONS[0]!.id
   if (!trimmed || !password) {
     throw new Error('Enter your email and password.')
   }
@@ -113,7 +154,7 @@ export async function helperLogin(
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: trimmed, password }),
+    body: JSON.stringify({ email: trimmed, password, locationId: shopId }),
   })
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { message?: string }
@@ -123,9 +164,9 @@ export async function helperLogin(
   const session: HelperSession = {
     token: data.token,
     user: data.user,
-    locationId: data.locationId || HELPER_LOCATIONS[0]!.id,
+    locationId: data.locationId || shopId,
   }
-  await applyWorkingLocation(session.locationId)
+  await applyWorkingLocation(session.locationId, data.bridalLive)
   await saveHelperSession(session)
   return session
 }

@@ -45,6 +45,12 @@ export const renderHome: ViewRender = (root) => {
           <label>Password
             <input name="password" type="password" autocomplete="current-password" required />
           </label>
+          <label>Working location
+            <select name="locationId">
+              <option value="poughkeepsie">Poughkeepsie</option>
+              <option value="white-plains">White Plains</option>
+            </select>
+          </label>
           <button type="submit" class="btn btn-primary btn-block">Sign in</button>
           <p class="status" id="blh-home-login-status" role="status"></p>
         </form>
@@ -62,6 +68,7 @@ export const renderHome: ViewRender = (root) => {
           session = await helperLogin(
             String(fd.get('email') ?? ''),
             String(fd.get('password') ?? ''),
+            String(fd.get('locationId') ?? ''),
           )
           paintAccount()
         } catch (err) {

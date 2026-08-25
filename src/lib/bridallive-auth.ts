@@ -106,7 +106,7 @@ export async function getBridalLiveSession(
   const resolved = await resolveLocationCredentials(storeId)
   if (!resolved) {
     throw new Error(
-      'Connect this location in Settings first. Paste the Retailer ID and API key from BridalLive (Settings → Account → API).',
+      'Sign in on Home and pick your working location first.',
     )
   }
 
@@ -159,7 +159,7 @@ export async function bridalLiveFetch<T>(
 
   if (!res.ok) {
     throw new Error(
-      `BridalLive could not complete this request (${res.status}). Check your connection in Settings, or try again.`,
+      `BridalLive could not complete this request (${res.status}). Sign in on Home, or try again.`,
     )
   }
 

@@ -84,7 +84,7 @@ async function resolveLocation(
   if (active) return active
   if (configured[0]) return configured[0]
   throw new Error(
-      'Connect this location in Settings first. Paste the Retailer ID and API key from BridalLive (Settings → Account → API).',
+      'Sign in on Home and pick your working location first.',
   )
 }
 

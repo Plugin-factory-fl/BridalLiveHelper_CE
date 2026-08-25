@@ -1,4 +1,3 @@
-import { listStores } from '../../api/client'
 import { MSG } from '../../lib/messages'
 import {
   INVENTORY_BROWSE_PAGE_SIZES,
@@ -10,7 +9,7 @@ import {
   type InventoryColumnId,
   type InventoryUiState,
 } from '../../lib/inventory-ui-state'
-import { getActiveBridalLiveCredentials } from '../../lib/bridallive-credentials'
+import { getWorkingLocationId } from '../../lib/helper-session'
 import {
   checkDuplicateVariant,
   createVariant,
@@ -29,13 +28,10 @@ import {
 } from '../../types/inventory'
 import type { BridalLiveContext } from '../../types/context'
 import type { ViewRender } from '../router'
+import { locationShorthand } from '../../lib/location-code'
 
 async function resolveStoreId(): Promise<string> {
-  const stored = await chrome.storage.local.get('mockStoreId')
-  const fromPrefs = String(stored.mockStoreId ?? '').trim()
-  if (fromPrefs) return fromPrefs
-  const creds = await getActiveBridalLiveCredentials()
-  return creds?.location.id ?? 'store-1'
+  return getWorkingLocationId()
 }
 
 function esc(s: string): string {
@@ -43,27 +39,6 @@ function esc(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/"/g, '&quot;')
-}
-
-/** Location shorthand for inventory table (Poughkeepsie → PK, not PO). */
-function locationShorthand(name: string): string {
-  const key = name.trim().toLowerCase()
-  const known: Record<string, string> = {
-    poughkeepsie: 'PK',
-    'white plains': 'WP',
-    'white-plains': 'WP',
-    'main boutique': 'MB',
-    'second location': 'SL',
-  }
-  if (known[key]) return known[key]
-
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) {
-    // Prefer first + last significant word for multi-word names when not in map.
-    return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
-  }
-  const cleaned = name.replace(/[^a-zA-Z0-9]/g, '')
-  return (cleaned.slice(0, 2) || '?').toUpperCase()
 }
 
 function prefillSearchFromOrder(form: HTMLFormElement, ctx: BridalLiveContext): void {
@@ -111,10 +86,10 @@ const DEFAULT_COL_WIDTHS: Record<InventoryColumnId, number> = {
   qty: 36,
 }
 
-function readSearchQuery(form: HTMLFormElement): InventorySearchQuery {
+function readSearchQuery(form: HTMLFormElement, locationId: string): InventorySearchQuery {
   const fd = new FormData(form)
   return {
-    locationId: String(fd.get('locationId') ?? '').trim(),
+    locationId,
     department: String(fd.get('department') ?? '').trim(),
     name: String(fd.get('name') ?? '').trim(),
     vendorItemName: String(fd.get('vendorItemName') ?? '').trim(),
@@ -127,7 +102,6 @@ function readSearchQuery(form: HTMLFormElement): InventorySearchQuery {
 
 function isSearchQueryEmpty(query: InventorySearchQuery): boolean {
   return (
-    !query.locationId &&
     !query.department &&
     !query.name &&
     !query.vendorItemName &&
@@ -180,16 +154,8 @@ export const renderInventory: ViewRender = (root) => {
   section.innerHTML = `
     <div id="blh-inv-order-banner" class="banner banner-info" hidden></div>
     <h2 class="view-title">Inventory</h2>
-    <p class="muted">Search every connected location. Add another size or color from an existing item in the results.</p>
+    <p class="muted">Search this boutique’s inventory. Add another size or color from an existing item in the results.</p>
     <form id="blh-inv-search" class="form-grid form-grid--clearable">
-      <label>Location
-        <span class="field-clear-wrap">
-          <select name="locationId" id="blh-inv-location" aria-label="Location">
-            <option value="">All locations</option>
-          </select>
-          <button type="button" class="field-clear-btn" hidden aria-label="Clear location" title="Clear">×</button>
-        </span>
-      </label>
       <label>Department
         <span class="field-clear-wrap">
           <select name="department" aria-label="Department">${departmentOptionsHtml}</select>
@@ -363,21 +329,6 @@ export const renderInventory: ViewRender = (root) => {
     }
   }
 
-  async function loadLocationFilterOptions(): Promise<void> {
-    const select = section.querySelector('#blh-inv-location') as HTMLSelectElement | null
-    if (!select) return
-    try {
-      const stores = await listStores()
-      select.innerHTML = [
-        '<option value="">All locations</option>',
-        ...stores.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`),
-      ].join('')
-    } catch {
-      select.innerHTML = '<option value="">All locations</option>'
-    }
-    wireFieldClearButtons(searchForm)
-  }
-
   const paintOrderBanner = () => {
     const ctx = getPanelContext()
     if (!ctx || ctx.screen !== 'order') {
@@ -439,7 +390,7 @@ export const renderInventory: ViewRender = (root) => {
     keepStatus?: { message: string; kind: 'success' | 'error' }
   }): Promise<void> {
     currentStoreId = await resolveStoreId()
-    const query = readSearchQuery(searchForm)
+    const query = readSearchQuery(searchForm, currentStoreId)
 
     if (!options?.keepStatus) {
       setInventoryStatus('')
@@ -626,7 +577,7 @@ export const renderInventory: ViewRender = (root) => {
     if (listItems.length === 0) {
       tableWrap.innerHTML =
         tableMode === 'search'
-          ? '<p class="muted inv-browse-empty">No matches. Try another location, department, name, vendor item name, or item #.</p>'
+          ? '<p class="muted inv-browse-empty">No matches. Try another department, name, vendor item name, or item #.</p>'
           : '<p class="muted inv-browse-empty">No items to show yet.</p>'
       pageLabel.textContent = 'Page 1 of 1'
       prevBtn.disabled = true
@@ -778,13 +729,7 @@ export const renderInventory: ViewRender = (root) => {
           const itemNumberInput = searchForm.elements.namedItem(
             'itemNumber',
           ) as HTMLInputElement | null
-          const locationSelect = searchForm.elements.namedItem(
-            'locationId',
-          ) as HTMLSelectElement | null
           if (itemNumberInput) itemNumberInput.value = variant.itemNumber
-          if (locationSelect && source.locationId) {
-            locationSelect.value = source.locationId
-          }
           // Clear competing filters that could hide the new row.
           for (const name of ['name', 'vendorItemName', 'vendor', 'size', 'color', 'department']) {
             const el = searchForm.elements.namedItem(name) as
@@ -839,7 +784,7 @@ export const renderInventory: ViewRender = (root) => {
       } else {
         listItems = []
         tableWrap.innerHTML =
-          '<p class="muted inv-browse-empty">No items for this location. Open Settings and check that the store is connected, then choose Live store for real inventory.</p>'
+          '<p class="muted inv-browse-empty">No items for this boutique. Sign in on Home and pick your working location.</p>'
         pageLabel.textContent = 'Page 1 of 1'
         prevBtn.disabled = true
         nextBtn.disabled = true
@@ -980,7 +925,6 @@ export const renderInventory: ViewRender = (root) => {
   chrome.storage.onChanged.addListener(onStorageChanged)
 
   applyContextPrefill()
-  void loadLocationFilterOptions()
   wireFieldClearButtons(searchForm)
   document.addEventListener('blh-context-updated', onContextForBrowse)
 

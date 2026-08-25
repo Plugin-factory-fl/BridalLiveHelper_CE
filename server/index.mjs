@@ -97,8 +97,15 @@ function bearer(req) {
   return match?.[1] ?? ''
 }
 
+function locationSecrets(locationId) {
+  return LOCATION_SECRETS[locationId] ?? { retailerId: '', apiKey: '' }
+}
+
 function publicSession(token, record) {
   const user = USERS.get(record.email)
+  const secrets = locationSecrets(record.locationId)
+  const environment = process.env.BL_ENVIRONMENT === 'qa' ? 'qa' : 'production'
+  const ready = Boolean(secrets.retailerId && secrets.apiKey)
   return {
     token,
     user: {
@@ -107,6 +114,13 @@ function publicSession(token, record) {
     },
     locationId: record.locationId,
     locations: LOCATIONS,
+    bridalLive: ready
+      ? {
+          retailerId: secrets.retailerId,
+          apiKey: secrets.apiKey,
+          environment,
+        }
+      : null,
   }
 }
 
@@ -134,7 +148,10 @@ const server = http.createServer(async (req, res) => {
         return
       }
       const token = crypto.randomUUID()
-      const locationId = 'poughkeepsie'
+      const requested = String(body.locationId ?? '')
+      const locationId = LOCATIONS.some((l) => l.id === requested)
+        ? requested
+        : 'poughkeepsie'
       sessions.set(token, { email, locationId })
       send(res, 200, publicSession(token, { email, locationId }))
       return

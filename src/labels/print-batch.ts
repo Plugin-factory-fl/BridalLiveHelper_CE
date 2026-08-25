@@ -61,7 +61,7 @@ export async function printLabelBatch(
       return {
         ok: false,
         message:
-          'Could not load item details from BridalLive for this label. Check the vendor item name, or reconnect this location in Settings.',
+          'Could not load item details from BridalLive for this label. Sign in on Home and pick your working location.',
         labelCount: 0,
         pageCount: 0,
       }

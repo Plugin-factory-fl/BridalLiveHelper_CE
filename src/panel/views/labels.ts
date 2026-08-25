@@ -13,21 +13,24 @@ import {
 import { AVERY_5160 } from '../../labels/templates'
 import {
   AUTO_STYLE_LAYOUT_ID,
+  autoDepartmentLayouts,
   describeLayoutSelection,
   getLabelStyleLayout,
   layoutOptionsForDropdown,
+  tagPreviewUrl,
 } from '../../labels/style-layouts'
 import {
   getActiveBridalLiveCredentials,
   isLocationConfigured,
-  loadBridalLiveApiSettings,
 } from '../../lib/bridallive-credentials'
+import { getWorkingLocationId } from '../../lib/helper-session'
 import {
   getReceivingVoucherLines,
   listReceivingVouchers,
   type BridalLiveReceivingVoucherSummary,
 } from '../../lib/bridallive-receiving'
 import { getPanelContext } from '../panel-context'
+import { mountMassLabeling } from './mass-labeling'
 import type { ViewRender } from '../router'
 
 const GRID_COLS = AVERY_5160.columns
@@ -84,22 +87,22 @@ export const renderLabels: ViewRender = (root) => {
         type="button"
         class="labels-subnav-btn"
         role="tab"
-        id="blh-labels-tab-mass"
-        data-subtab="mass"
-        aria-controls="blh-labels-panel-mass"
-        aria-selected="false"
-        tabindex="-1"
-      >Mass Labeling</button>
-      <button
-        type="button"
-        class="labels-subnav-btn"
-        role="tab"
         id="blh-labels-tab-reprint"
         data-subtab="reprint"
         aria-controls="blh-labels-panel-reprint"
         aria-selected="false"
         tabindex="-1"
       >Reprint Label</button>
+      <button
+        type="button"
+        class="labels-subnav-btn"
+        role="tab"
+        id="blh-labels-tab-mass"
+        data-subtab="mass"
+        aria-controls="blh-labels-panel-mass"
+        aria-selected="false"
+        tabindex="-1"
+      >Mass Labeling</button>
     </div>
 
     <section
@@ -109,13 +112,10 @@ export const renderLabels: ViewRender = (root) => {
       aria-labelledby="blh-labels-tab-receiving"
     >
       <p class="labels-lead">
-        Choose a location and voucher, pick the lines you need, then print one label for each received piece.
+        Pick the voucher, choose the lines you need, then print one label for each received piece.
       </p>
       <div id="blh-labels-context-banner" class="banner banner-info" hidden></div>
       <div class="form-grid form-grid--compact receiving-controls">
-        <label>Location
-          <select id="blh-receiving-location"></select>
-        </label>
         <label>Voucher
           <select id="blh-receiving-voucher"></select>
         </label>
@@ -125,20 +125,12 @@ export const renderLabels: ViewRender = (root) => {
         <button type="button" class="btn btn-ghost btn-sm" id="blh-receiving-select-all">Select all</button>
         <button type="button" class="btn btn-ghost btn-sm" id="blh-receiving-select-none">Select none</button>
       </div>
-      <p class="muted small" id="blh-receiving-hint">Choose a location to load vouchers…</p>
+      <p class="muted small" id="blh-receiving-hint">Loading vouchers for this boutique…</p>
       <ul id="blh-labels-receiving-list" class="receiving-lines"></ul>
       <button type="button" class="btn btn-primary btn-block" id="blh-labels-receiving">
         Print selected labels
       </button>
     </section>
-
-    <section
-      class="labels-tab-panel"
-      id="blh-labels-panel-mass"
-      role="tabpanel"
-      aria-labelledby="blh-labels-tab-mass"
-      hidden
-    ></section>
 
     <section
       class="labels-tab-panel labels-block labels-block--reprint"
@@ -164,6 +156,14 @@ export const renderLabels: ViewRender = (root) => {
         <button type="submit" class="btn btn-reprint">Reprint label</button>
       </form>
     </section>
+
+    <section
+      class="labels-tab-panel"
+      id="blh-labels-panel-mass"
+      role="tabpanel"
+      aria-labelledby="blh-labels-tab-mass"
+      hidden
+    ></section>
 
     <p id="blh-labels-status" class="status" role="status"></p>
 
@@ -206,10 +206,12 @@ export const renderLabels: ViewRender = (root) => {
   const reprintForm = section.querySelector('#blh-labels-reprint-form') as HTMLFormElement
   const styleSelect = section.querySelector('#blh-label-style-layout') as HTMLSelectElement
   const stylePreview = section.querySelector('#blh-label-style-preview') as HTMLElement
-  const locationSelect = section.querySelector('#blh-receiving-location') as HTMLSelectElement
   const voucherSelect = section.querySelector('#blh-receiving-voucher') as HTMLSelectElement
   const receivingHint = section.querySelector('#blh-receiving-hint') as HTMLElement
+  const sharedEl = section.querySelector('.labels-shared') as HTMLElement
+  const massPanel = section.querySelector('#blh-labels-panel-mass') as HTMLElement
   const scrollRoot = document.getElementById('blh-view-root')
+  const unmountMass = mountMassLabeling(massPanel)
 
   const persistUiState = () => {
     const fd = new FormData(reprintForm)
@@ -233,18 +235,26 @@ export const renderLabels: ViewRender = (root) => {
     })
   }
 
+  const layoutThumb = (layout: ReturnType<typeof getLabelStyleLayout>, caption: string) => {
+    if (!layout) return ''
+    const src = layout.previewImage ? tagPreviewUrl(layout.previewImage) : ''
+    const img = src
+      ? `<img class="label-style-preview-img" src="${escapeHtml(src)}" alt="${escapeHtml(layout.name)} tag" />`
+      : `<div class="label-style-preview-placeholder">${escapeHtml(layout.name)}</div>`
+    return `<figure class="label-style-preview-figure">${img}<figcaption>${escapeHtml(caption)}</figcaption></figure>`
+  }
+
   const paintStylePreview = () => {
     const selection = labelStyleLayoutId
     if (selection === AUTO_STYLE_LAYOUT_ID) {
+      const thumbs = autoDepartmentLayouts()
+        .map((layout) => layoutThumb(layout, `${layout.department} → ${layout.name}`))
+        .join('')
       stylePreview.innerHTML = `
         <p class="label-style-preview-title">Auto by department</p>
         <p class="label-style-preview-desc">${escapeHtml(describeLayoutSelection(selection))}</p>
-        <ul class="label-style-preview-fields">
-          <li>Dress → Dress — Classic tag</li>
-          <li>Shoes → Shoes — Standard</li>
-          <li>Jewelry → Jewelry — Standard</li>
-        </ul>
-        <p class="label-style-preview-note muted small">Best when a voucher mixes dresses, shoes, and jewelry.</p>
+        <div class="label-style-preview-thumbs">${thumbs}</div>
+        <p class="label-style-preview-note muted small">Best when a voucher mixes dresses, shoes, and jewelry. Pick a design above to use one layout for every label.</p>
       `
       return
     }
@@ -255,12 +265,17 @@ export const renderLabels: ViewRender = (root) => {
       return
     }
 
+    const mockup = layout.previewImage
+      ? `<img class="label-style-preview-img label-style-preview-img--lg" src="${escapeHtml(tagPreviewUrl(layout.previewImage))}" alt="${escapeHtml(layout.name)} tag" />`
+      : ''
+
     stylePreview.innerHTML = `
       <div class="label-style-preview-header">
         <p class="label-style-preview-title">${escapeHtml(layout.name)}</p>
         <span class="tag">${escapeHtml(layout.department)}</span>
       </div>
       <p class="label-style-preview-desc">${escapeHtml(layout.description)}</p>
+      ${mockup}
       <p class="label-style-preview-fields-label">Fields on the label</p>
       <ul class="label-style-preview-fields">
         ${layout.fields.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}
@@ -279,6 +294,8 @@ export const renderLabels: ViewRender = (root) => {
       const panelTab = panel.id.replace('blh-labels-panel-', '') as LabelsSubTab
       panel.hidden = panelTab !== activeSubTab
     })
+    if (sharedEl) sharedEl.hidden = activeSubTab === 'mass'
+    statusEl.hidden = activeSubTab === 'mass'
   }
 
   const setActiveSubTab = (tab: LabelsSubTab) => {
@@ -395,30 +412,16 @@ export const renderLabels: ViewRender = (root) => {
     }
   }
 
-  const loadReceivingLocations = async () => {
-    const settings = await loadBridalLiveApiSettings()
-    const configured = settings.locations.filter(isLocationConfigured)
-    if (configured.length === 0) {
-      locationSelect.innerHTML =
-        '<option value="">Connect this location in Settings</option>'
-      locationSelect.disabled = true
+  const loadWorkingLocation = async () => {
+    receivingLocationId = await getWorkingLocationId()
+    const creds = await getActiveBridalLiveCredentials()
+    if (!creds || !isLocationConfigured(creds.location)) {
       voucherSelect.innerHTML = '<option value="">—</option>'
       voucherSelect.disabled = true
       receivingHint.textContent =
-        'Connect each location in Settings (Retailer ID and API key), choose Live store, then refresh.'
+        'Sign in on Home and pick your working location. The Helper server supplies this boutique’s BridalLive keys.'
       return false
     }
-
-    locationSelect.disabled = false
-    locationSelect.innerHTML = configured
-      .map((l) => `<option value="${escapeHtml(l.id)}">${escapeHtml(l.name)}</option>`)
-      .join('')
-
-    if (!receivingLocationId || !configured.some((l) => l.id === receivingLocationId)) {
-      const active = await getActiveBridalLiveCredentials()
-      receivingLocationId = active?.location.id ?? configured[0]!.id
-    }
-    locationSelect.value = receivingLocationId
     return true
   }
 
@@ -569,19 +572,12 @@ export const renderLabels: ViewRender = (root) => {
   void (async () => {
     await applySavedUiState()
     paintBanner()
-    const ok = await loadReceivingLocations()
+    const ok = await loadWorkingLocation()
     if (ok) await loadVouchersForLocation()
   })()
 
   paintBanner()
   document.addEventListener('blh-context-updated', paintBanner)
-
-  locationSelect.addEventListener('change', () => {
-    receivingLocationId = locationSelect.value
-    receivingVoucherId = null
-    selectionByItem = {}
-    void loadVouchersForLocation()
-  })
 
   voucherSelect.addEventListener('change', () => {
     const id = Number(voucherSelect.value)
@@ -675,5 +671,6 @@ export const renderLabels: ViewRender = (root) => {
   return () => {
     document.removeEventListener('blh-context-updated', paintBanner)
     scrollRoot?.removeEventListener('scroll', onScroll)
+    unmountMass()
   }
 }
