@@ -25,6 +25,8 @@ You must sign in on Home before Inventory or Labels. BridalLive keys stay on the
 ## Guides
 
 - [Set up the Helper](docs/SETUP.md) — install in Chrome and sign in
+- [Chrome Web Store listing](docs/CHROME_WEB_STORE.md) — version 0.0.1 zip and store copy
+- [Privacy policy](docs/PRIVACY.md)
 - [Using Inventory](docs/INVENTORY_PILLAR.md)
 - [Printing labels](docs/BRIDALLIVE_CONTEXT.md)
 - [How it works](docs/ARCHITECTURE.md)

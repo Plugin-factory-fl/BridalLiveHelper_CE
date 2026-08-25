@@ -161,6 +161,18 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
+    if (req.method === 'GET' && (url.pathname === '/privacy' || url.pathname === '/privacy-policy')) {
+      const file = path.join(rootDir, 'server/privacy.html')
+      const html = fs.readFileSync(file, 'utf8')
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Length': Buffer.byteLength(html),
+        ...CORS,
+      })
+      res.end(html)
+      return
+    }
+
     if (req.method === 'GET' && url.pathname === '/auth/signup-config') {
       send(res, 200, userStore.signupConfig())
       return

@@ -46,9 +46,4 @@ Staff send email, password, and a location id. BridalLive keys never leave the s
 
 ## Remaining work that needs a person (not code)
 
-These cannot be finished from the repo alone:
-
-- **Private Chrome Web Store listing** — how the shop installs and updates the Helper.
-- **Render persistent disk** — paid disk mounted at `/opt/render/project/src/data` so accounts and sessions survive restarts.
-- **Poughkeepsie BridalLive API access** — BridalLive must enable API on that license (`login.error.invalidLicense` until they do).
-- **Deploy the latest server** to Render after this proxy work is pushed, so the live API actually forwards `/bl/...`.
+- **Private or unlisted Chrome Web Store listing** — upload `bridallive-helper-0.0.1.zip` and paste the copy in [Chrome Web Store listing](./CHROME_WEB_STORE.md). That is how the shop installs and updates the Helper. Unpacked `dist/` is for development.

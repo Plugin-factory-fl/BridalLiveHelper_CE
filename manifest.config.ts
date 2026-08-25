@@ -3,9 +3,10 @@ import { defineManifest } from '@crxjs/vite-plugin'
 export default defineManifest({
   manifest_version: 3,
   name: 'BridalLive Helper',
+  version: '0.0.1',
   description:
     'Side workstation for BridalLive: look up inventory, add sizes and colors, and print labels.',
-  version: '0.3.0',
+  homepage_url: 'https://bridallivehelper-ce.onrender.com/privacy',
   minimum_chrome_version: '141',
   icons: {
     '16': 'public/icons/icon-16.png',
@@ -17,6 +18,7 @@ export default defineManifest({
     default_icon: {
       '16': 'public/icons/icon-16.png',
       '48': 'public/icons/icon-48.png',
+      '128': 'public/icons/icon-128.png',
     },
   },
   side_panel: {
@@ -31,7 +33,6 @@ export default defineManifest({
     'https://app.bridallive.com/*',
     'https://*.bridallive.com/*',
     'https://bridallivehelper-ce.onrender.com/*',
-    'http://localhost:8787/*',
   ],
   content_scripts: [
     {

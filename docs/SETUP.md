@@ -6,7 +6,7 @@ BridalLive Retailer IDs and API keys are **not** pasted into the Helper. They li
 
 ## Install in Chrome
 
-The shop’s long-term install is a **private Chrome Web Store listing**. Until that listing is live, load the built `dist/` folder as an unpacked extension:
+The shop’s long-term install is a **private or unlisted Chrome Web Store listing** (version **0.0.1**). See [Chrome Web Store listing](./CHROME_WEB_STORE.md). Until that listing is live, load the built `dist/` folder as an unpacked extension:
 
 1. Get the built Helper folder (`dist/`). If you are building from this project:
 
