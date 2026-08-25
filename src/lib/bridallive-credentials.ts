@@ -106,9 +106,10 @@ export async function getActiveBridalLiveCredentials(): Promise<{
 }
 
 export function credentialsStatusLabel(settings: BridalLiveApiSettings): string {
-  const configured = settings.locations.filter(isLocationConfigured).length
+  const configured = settings.locations.filter(isLocationConfigured)
   const total = settings.locations.length
-  if (configured === 0) return 'No API credentials saved'
-  if (configured === total) return `${configured}/${total} locations configured`
-  return `${configured}/${total} locations configured`
+  if (configured.length === 0) return 'No stores connected yet'
+  const names = configured.map((l) => l.name).join(' and ')
+  if (configured.length === total) return `Connected: ${names}`
+  return `Connected: ${names} (${configured.length} of ${total} locations)`
 }

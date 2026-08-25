@@ -4,7 +4,7 @@ export default defineManifest({
   manifest_version: 3,
   name: 'BridalLive Helper',
   description:
-    'Side workstation for BridalLive: inventory lookup, variant creation, and custom labels.',
+    'Side workstation for BridalLive: look up inventory, add sizes and colors, and print labels.',
   version: '0.3.0',
   minimum_chrome_version: '141',
   icons: {

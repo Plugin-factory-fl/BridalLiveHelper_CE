@@ -59,7 +59,7 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
         await navigator.clipboard.writeText(message.text)
         return { ok: true }
       } catch {
-        return { ok: false, error: 'Clipboard write failed' }
+        return { ok: false, error: 'Could not copy. Try again.' }
       }
 
     case MSG.INVENTORY_SEARCH: {

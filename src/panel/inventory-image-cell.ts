@@ -30,7 +30,7 @@ export function inventoryImageCellHtml(
       class="inv-item-thumb inv-item-thumb--placeholder"
       role="img"
       aria-label="No photo yet (${deptHint})"
-      title="Photo coming when BridalLive API is connected (Phase 2)"
+      title="No photo for this item"
     >
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>

@@ -814,18 +814,18 @@ export async function applySaleSearchToOrder(
   if (!selector) {
     return {
       ok: false,
-      error: 'Order item # selector not configured. See docs/BRIDALLIVE_CONTEXT.md.',
+      error: 'Stay on the sale screen and try adding this item again.',
     }
   }
 
   const trimmed = saleSearchQuery.trim()
   if (!trimmed) {
-    return { ok: false, error: 'Sale search text is empty.' }
+    return { ok: false, error: 'Enter an item number to add to the sale.' }
   }
 
   const el = document.querySelector(selector)
   if (!el || !(el instanceof HTMLInputElement)) {
-    return { ok: false, error: `Selector not found: ${selector}` }
+    return { ok: false, error: 'Could not find item search on this sale. Stay on the sale screen and try again.' }
   }
 
   if (el.disabled) {
@@ -864,7 +864,7 @@ export async function applySaleSearchToOrder(
     warn('applySaleSearchToOrder failed', e)
     return {
       ok: false,
-      error: e instanceof Error ? e.message : 'Add to order failed',
+      error: e instanceof Error ? e.message : 'Could not add this item to the order',
     }
   }
 }

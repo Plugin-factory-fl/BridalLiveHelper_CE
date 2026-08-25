@@ -41,7 +41,7 @@ function locationFieldsHtml(loc: BridalLiveLocationCredentials): string {
           value="${escapeAttr(loc.retailerId)}"
           autocomplete="off"
           spellcheck="false"
-          placeholder="From Settings → Account → API"
+          placeholder="BridalLive → Settings → Account → API"
         />
       </label>
       <label>API key
@@ -51,7 +51,7 @@ function locationFieldsHtml(loc: BridalLiveLocationCredentials): string {
           value="${escapeAttr(loc.apiKey)}"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Paste API key"
+          placeholder="Paste the key for this location"
         />
       </label>
     </fieldset>
@@ -85,8 +85,8 @@ export const renderSettings: ViewRender = (root) => {
     <h2 class="view-title">Settings</h2>
     <p class="data-source-badge" id="blh-data-source"></p>
     <p class="muted small">
-      When Retailer ID + API key are saved below, inventory search and variant create use the BridalLive API.
-      Add-to-order still uses the open BridalLive tab.
+      Connect each boutique so search, new sizes, receiving vouchers, and label reprints use live BridalLive inventory.
+      Adding an item to a sale still uses the BridalLive tab you have open.
     </p>
     <form id="blh-settings-form" class="form-stack">
       <label>Text size
@@ -96,33 +96,25 @@ export const renderSettings: ViewRender = (root) => {
           <option value="large">Large</option>
         </select>
       </label>
-      <label>Active store
+      <label>Default location
         <select name="mockStoreId" id="blh-store-select"></select>
-      </label>
-      <label>Dev screen override
-        <select name="devScreenOverride" id="blh-dev-screen">
-          <option value="">Auto (URL)</option>
-          <option value="order">Order</option>
-          <option value="receiving">Receiving</option>
-          <option value="inventory">Inventory</option>
-          <option value="unknown">Unknown</option>
-        </select>
       </label>
       <fieldset class="fieldset" id="blh-inv-columns">
         <legend>Inventory columns</legend>
-        <p class="muted small">Choose which columns appear in inventory browse and search results. Drag column edges in the table to resize.</p>
+        <p class="muted small">Choose which columns appear in search results. Drag a column edge in the table to resize.</p>
         <div class="inv-column-toggles" id="blh-inv-column-toggles"></div>
       </fieldset>
       <fieldset class="fieldset" id="blh-api-credentials">
-        <legend>BridalLive API</legend>
+        <legend>Connect your stores</legend>
         <p class="muted small">
-          Stored only in this browser. Use <strong>QA</strong> until sandbox testing is done. Each location needs its own Retailer ID and API key from Settings → Account → API.
+          Keys stay in this Chrome profile only. Each location needs its own Retailer ID and API key from BridalLive
+          <strong>Settings → Account → API</strong>. Use <strong>Live store</strong> for real inventory.
         </p>
         <p class="bl-api-status muted small" id="blh-api-status" role="status"></p>
-        <label>API environment
+        <label>Store data
           <select name="blApiEnvironment" id="blh-api-env">
-            <option value="qa">QA / Sandbox</option>
-            <option value="production">Production</option>
+            <option value="qa">Practice</option>
+            <option value="production">Live store</option>
           </select>
         </label>
         <label>Active location
@@ -134,13 +126,28 @@ export const renderSettings: ViewRender = (root) => {
         <div id="blh-api-locations" class="bl-api-locations"></div>
         <div class="btn-row">
           <button type="button" class="btn btn-secondary btn-sm" id="blh-api-test">
-            Test API connection
+            Test connection
           </button>
           <button type="button" class="btn btn-ghost btn-sm" id="blh-api-clear">
-            Clear API credentials
+            Disconnect stores
           </button>
         </div>
       </fieldset>
+      <details class="practice-options">
+        <summary>Practice options</summary>
+        <p class="muted small">
+          Use this only for training, when you want Home and banners to treat BridalLive as a different screen.
+        </p>
+        <label>Treat this screen as
+          <select name="devScreenOverride" id="blh-dev-screen">
+            <option value="">Follow BridalLive</option>
+            <option value="order">Sale / order</option>
+            <option value="receiving">Receiving</option>
+            <option value="inventory">Inventory</option>
+            <option value="unknown">Other</option>
+          </select>
+        </label>
+      </details>
       <button type="submit" class="btn btn-primary">Save</button>
     </form>
     <p id="blh-settings-status" class="status" role="status"></p>
@@ -161,7 +168,7 @@ export const renderSettings: ViewRender = (root) => {
   const status = section.querySelector('#blh-settings-status') as HTMLElement
 
   const refreshDataSourceBadge = async () => {
-    badge.textContent = `Data source: ${await resolveDataSourceLabel()}`
+    badge.textContent = await resolveDataSourceLabel()
   }
 
   const refreshStoreSelect = async (preferredId?: string) => {
@@ -186,11 +193,13 @@ export const renderSettings: ViewRender = (root) => {
   }
 
   void refreshDataSourceBadge()
-  void refreshStoreSelect().then(async () => {
+    void refreshStoreSelect().then(async () => {
     const prefs = await loadPreferences()
     const dev = section.querySelector('#blh-dev-screen') as HTMLSelectElement
     dev.value = prefs.devScreenOverride ?? ''
     fontSizeSelect.value = prefs.fontSize
+    const practice = section.querySelector('.practice-options') as HTMLDetailsElement | null
+    if (practice && prefs.devScreenOverride) practice.open = true
   })
 
   fontSizeSelect.addEventListener('change', () => {
@@ -212,7 +221,7 @@ export const renderSettings: ViewRender = (root) => {
   const form = section.querySelector('#blh-settings-form') as HTMLFormElement
 
   section.querySelector('#blh-api-test')?.addEventListener('click', async () => {
-    status.textContent = 'Testing API login…'
+    status.textContent = 'Testing connection…'
     status.className = 'status'
     try {
       clearBridalLiveSessions()
@@ -228,7 +237,7 @@ export const renderSettings: ViewRender = (root) => {
       await refreshDataSourceBadge()
       await refreshStoreSelect(draft.activeLocationId)
     } catch (err) {
-      status.textContent = err instanceof Error ? err.message : 'API test failed'
+      status.textContent = err instanceof Error ? err.message : 'Could not connect. Check the keys for this location.'
       status.className = 'status error'
     }
   })
@@ -246,7 +255,7 @@ export const renderSettings: ViewRender = (root) => {
     applyApiSettingsToForm(cleared)
     await refreshStoreSelect()
     await refreshDataSourceBadge()
-    status.textContent = 'API credentials cleared. Inventory will use mock data.'
+    status.textContent = 'Stores disconnected. Inventory will use a sample catalog until you connect again.'
     status.className = 'status success'
   })
 
@@ -295,7 +304,7 @@ export const renderSettings: ViewRender = (root) => {
 
     await sendToContent({ type: MSG.GET_CONTEXT })
     status.textContent = activeConfigured
-      ? 'Settings saved. Inventory will use BridalLive API.'
+      ? 'Settings saved. Inventory will use your live BridalLive catalog.'
       : 'Settings saved.'
     status.className = 'status success'
   })

@@ -180,7 +180,7 @@ export const renderInventory: ViewRender = (root) => {
   section.innerHTML = `
     <div id="blh-inv-order-banner" class="banner banner-info" hidden></div>
     <h2 class="view-title">Inventory</h2>
-    <p class="muted">Search across all connected locations. Add a new size or color from an existing item in the results.</p>
+    <p class="muted">Search every connected location. Add another size or color from an existing item in the results.</p>
     <form id="blh-inv-search" class="form-grid form-grid--clearable">
       <label>Location
         <span class="field-clear-wrap">
@@ -202,7 +202,7 @@ export const renderInventory: ViewRender = (root) => {
             name="name"
             type="text"
             placeholder="CD55830"
-            title="BL item name (full code from export)"
+            title="BridalLive item name"
             autocomplete="off"
           />
           <button type="button" class="field-clear-btn" hidden aria-label="Clear name" title="Clear">×</button>
@@ -214,7 +214,7 @@ export const renderInventory: ViewRender = (root) => {
             name="vendorItemName"
             type="text"
             placeholder="j879"
-            title="BL vendor item name (private label / manufacturer name)"
+            title="Manufacturer / vendor style name"
             autocomplete="off"
           />
           <button type="button" class="field-clear-btn" hidden aria-label="Clear vendor item name" title="Clear">×</button>
@@ -250,8 +250,8 @@ export const renderInventory: ViewRender = (root) => {
     <section class="inv-browse" id="blh-inv-browse" hidden aria-labelledby="blh-inv-browse-heading">
       <div class="inv-browse-header">
         <div>
-          <h3 class="subheading" id="blh-inv-browse-heading">Browse catalog</h3>
-          <p class="muted small" id="blh-inv-browse-hint">Leave search fields empty and press Search · Click a column header to sort</p>
+          <h3 class="subheading" id="blh-inv-browse-heading">All items</h3>
+          <p class="muted small" id="blh-inv-browse-hint">Leave search empty and click Search · Click a column header to sort</p>
         </div>
         <label class="inv-page-size">
           Show
@@ -353,13 +353,13 @@ export const renderInventory: ViewRender = (root) => {
   function setListChrome(mode: 'browse' | 'search'): void {
     tableMode = mode
     if (mode === 'browse') {
-      listHeading.textContent = 'Browse catalog'
+      listHeading.textContent = 'All items'
       listHint.textContent =
-        'Leave search fields empty and press Search · Click a column header to sort'
+        'Leave search empty and click Search · Click a column header to sort'
     } else {
       listHeading.textContent = 'Search results'
       listHint.textContent =
-        'Filtered inventory · Click a column header to sort · Use pages below to browse matches'
+        'Filtered results · Click a column header to sort · Use the pages below to browse matches'
     }
   }
 
@@ -393,10 +393,10 @@ export const renderInventory: ViewRender = (root) => {
         line.size && `Size ${line.size}`,
         line.color && `Color ${line.color}`,
       ].filter(Boolean)
-      orderBanner.textContent = `Order screen — ${parts.join(' · ') || 'line detected'}`
+      orderBanner.textContent = `On a sale — ${parts.join(' · ') || 'search here while you work the order.'}`
     } else {
       orderBanner.textContent =
-        'Order screen — search inventory here while you work the order.'
+        'On a sale — search inventory here without leaving the order.'
     }
   }
 
@@ -410,7 +410,7 @@ export const renderInventory: ViewRender = (root) => {
 
   function showDuplicateModal(message: string, onDismiss?: () => void): void {
     showModal(section, {
-      title: 'Duplicate variant',
+      title: 'This size and color already exists',
       body: message,
       variant: 'warn',
       primaryLabel: 'Got it',
@@ -420,7 +420,7 @@ export const renderInventory: ViewRender = (root) => {
 
   function showVariantCreatedModal(message: string): void {
     showModal(section, {
-      title: 'Variant created',
+      title: 'Size or color added',
       body: message,
       variant: 'info',
       primaryLabel: 'Got it',
@@ -552,7 +552,7 @@ export const renderInventory: ViewRender = (root) => {
   }
 
   function inventoryRowActionsHtml(item: InventoryItem, onOrder: boolean): string {
-    const variant = `<button type="button" class="btn btn-add-variant btn-sm btn-icon-action" data-add-variant title="Add another size or color for this style" aria-label="Add variant">+</button>`
+        const variant = `<button type="button" class="btn btn-add-variant btn-sm btn-icon-action" data-add-variant title="Add another size or color for this style" aria-label="Add another size or color">+</button>`
     const order = onOrder
       ? `<button type="button" class="btn btn-add-to-order btn-sm btn-icon-action" data-apply="${esc(item.itemNumber)}" data-item-id="${esc(item.id)}" data-item-number="${esc(item.itemNumber)}" title="Add to order" aria-label="Add to order">⊕</button>`
       : ''
@@ -627,7 +627,7 @@ export const renderInventory: ViewRender = (root) => {
       tableWrap.innerHTML =
         tableMode === 'search'
           ? '<p class="muted inv-browse-empty">No matches. Try another location, department, name, vendor item name, or item #.</p>'
-          : '<p class="muted inv-browse-empty">No inventory to browse yet.</p>'
+          : '<p class="muted inv-browse-empty">No items to show yet.</p>'
       pageLabel.textContent = 'Page 1 of 1'
       prevBtn.disabled = true
       nextBtn.disabled = true
@@ -662,7 +662,7 @@ export const renderInventory: ViewRender = (root) => {
     overlay.innerHTML = `
       <div class="blh-modal-backdrop" data-close></div>
       <div class="blh-modal blh-modal--info" role="dialog" aria-modal="true">
-        <h3 class="blh-modal-title">Add variant</h3>
+        <h3 class="blh-modal-title">Add a size or color</h3>
         <div class="blh-variant-source">
           <p class="blh-variant-source-label">Adding to</p>
           <p class="blh-variant-source-item"><strong>${esc(source.style)}</strong> · ${esc(source.vendor)}</p>
@@ -686,7 +686,7 @@ export const renderInventory: ViewRender = (root) => {
           <label>New color <input name="color" type="text" required placeholder="e.g. Ivory" autocomplete="off" /></label>
           <div class="blh-modal-actions blh-modal-actions--form">
             <button type="button" class="btn btn-secondary" data-close>Cancel</button>
-            <button type="submit" class="btn btn-primary">Create variant</button>
+            <button type="submit" class="btn btn-primary">Add to BridalLive</button>
           </div>
         </form>
       </div>
@@ -765,10 +765,10 @@ export const renderInventory: ViewRender = (root) => {
         close()
         const itemLabel = variant.itemNumber ? `item #${variant.itemNumber}` : 'a new item'
         const successMsg =
-          `Variant created in BridalLive as ${itemLabel}` +
+          `Added to BridalLive as ${itemLabel}` +
           ` (${size} / ${color}) for ${source.style}` +
           ` · vendor item name “${vendorItemName}”.` +
-          ` Use ⊕ Add to order if you want it on the open sale.`
+          ` Use ⊕ to add it to the open sale.`
 
         showVariantCreatedModal(successMsg)
         setInventoryStatus(successMsg, 'success')
@@ -801,7 +801,7 @@ export const renderInventory: ViewRender = (root) => {
         })
       } catch (err) {
         setInventoryStatus(
-          err instanceof Error ? err.message : 'Failed to create variant',
+          err instanceof Error ? err.message : 'Could not add this size or color',
           'error',
         )
       } finally {
@@ -839,7 +839,7 @@ export const renderInventory: ViewRender = (root) => {
       } else {
         listItems = []
         tableWrap.innerHTML =
-          '<p class="muted inv-browse-empty">No inventory returned for this location. Check API credentials and environment (QA vs Production).</p>'
+          '<p class="muted inv-browse-empty">No items for this location. Open Settings and check that the store is connected, then choose Live store for real inventory.</p>'
         pageLabel.textContent = 'Page 1 of 1'
         prevBtn.disabled = true
         nextBtn.disabled = true
@@ -847,7 +847,7 @@ export const renderInventory: ViewRender = (root) => {
     } catch (err) {
       listItems = []
       tableWrap.innerHTML = `<p class="error inv-browse-empty">${esc(
-        err instanceof Error ? err.message : 'Could not load catalog',
+        err instanceof Error ? err.message : 'Could not load items',
       )}</p>`
       pageLabel.textContent = 'Page 1 of 1'
       prevBtn.disabled = true
@@ -914,15 +914,14 @@ export const renderInventory: ViewRender = (root) => {
           inventoryItemId: el.dataset.itemId,
         })
         if (res.ok) {
-          const via = res.addMethod === 'api' ? ' via API' : ''
           statusEl.textContent =
             res.message ??
-            `Item #${itemNumber} added to the order${via}.${
-              res.addMethod === 'api' ? ' Refreshing sale…' : ''
+            `Item #${itemNumber} added to the order.${
+              res.addMethod === 'api' ? ' Refreshing the sale…' : ''
             }`
           statusEl.className = 'status success'
         } else {
-          statusEl.textContent = res.error ?? 'Could not apply to order'
+          statusEl.textContent = res.error ?? 'Could not add this item to the order'
           statusEl.className = 'status error'
         }
       })

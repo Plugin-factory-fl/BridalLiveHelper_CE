@@ -1,48 +1,37 @@
-# BridalLive page context
+# Printing labels & which screen you are on
 
-The extension classifies the active BridalLive screen using **URL and title heuristics** until DOM selectors are confirmed with a logged-in store account.
+The Helper notices whether BridalLive is on a **sale**, a **receiving voucher**, or **inventory**, and Home suggests the next step.
 
-## Screen types
+## Sales
 
-| Screen | Client workflow | Heuristic signals (foundation) |
-|--------|-----------------|--------------------------------|
-| `order` | Special order / POS — inventory lookup beside order | `order`, `pos`, `sale`, `transaction`, `special order` |
-| `receiving` | Bulk label print from voucher | `receiv`, `voucher`, `goods receipt` |
-| `inventory` | Item lookup, reprint label | `inventory`, `item`, `product` |
-| `unknown` | Fallback | Everything else |
+When a sale or POS screen is open:
 
-## Developer override
+- **Inventory** shows a banner so you can search without leaving the order.
+- Use **⊕** on a result to add that item to the open sale.
+- Keep the sale tab visible while you add.
 
-**Settings → Dev screen override** forces a screen type without changing the URL. Useful before selectors exist.
+If the Helper cannot read the current line, search by item # or style as you normally would.
 
-## Confirmed selectors (Sale / POS)
+## Receiving
 
-### Sale transaction (e.g. Sale #24818)
+When a receiving voucher is open:
 
-- **Screen type:** `order` (URL/title heuristics match `sale`, `transaction`, etc.)
-- **Add line search:** item name / number typeahead on the sale footer
-  - Selector: `input[ng-model="itemsSearchSettings.query"]`
-  - Placeholder: `Search for an item by name`
-  - Angular: `item-search-typeahead-grid`, on-select `chooseItem`
-- **Quick-add modal button (optional):** `button[secured-by="QUICK_ADD_ITEM"]` → `openAddNewItemModal()` — not used for apply; opens manual add modal
+- Open **Labels**.
+- Pick the **location** and **voucher**.
+- Check the lines you want, then print. You get one label per received quantity.
 
-Extension **Add to order**: (1) open gear settings panel, (2) select **Item number** radio (`itemsSearchSettings.field = 'itemNumber'`), (3) close settings, (4) fill search with item # (e.g. `49153`), (5) if the typeahead **grid** (columns Item # / Color / Size / …) shows **exactly one data row**, click that row (or call `chooseItem` on scope). Header row is ignored. Multiple data rows are left for staff to pick manually.
+If you are not on a receiving screen, you can still pick a voucher from the list after the stores are connected.
 
-Debug logs (`[BridalLiveHelper] step 5…`) appear in the **BridalLive tab** DevTools console, not the side panel.
+## Inventory in BridalLive
 
-- Item number mode: `input[type="radio"][ng-model="itemsSearchSettings.field"][value="itemNumber"]`
-- Item name mode: same `ng-model`, `value="itemName"` (confirm in DevTools if label differs)
+Use the Helper to look up an item # and **reprint** its label with current price, size, color, and barcode.
 
-### Still TODO
+## Printing
 
-1. Exact pathname/hash patterns for sale vs special order vs POS (record samples)
-2. Receiving voucher line table selectors
-3. Style / size / color fields on sale lines (for richer prefill), if distinct from search query
+Labels print on **Avery 5160** sheets.
 
-## iframe panel URL
+1. Choose a **design**, or leave it on auto so dress, shoes, and jewelry each use their layout.
+2. If the sheet is partly used, click the **first empty label**. Printing fills left to right, top to bottom from there.
+3. Print at **100%** scale. Do not use “Fit to page.”
 
-The content script loads:
-
-`chrome.runtime.getURL('src/panel/index.html')`
-
-Built output path may differ under `dist/`; CRXJS rewrites manifest resources automatically.
+A print preview opens in a new Chrome tab.

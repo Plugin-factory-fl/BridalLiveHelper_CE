@@ -1,12 +1,11 @@
 import type { BridalLiveContext, BridalLiveScreen } from '../types/context'
 import { readOrderLineHints } from './order-context'
-import { orderSelectorsConfigured } from '../bridallive/selectors'
 
 const SCREEN_LABELS: Record<BridalLiveScreen, string> = {
-  order: 'Order / POS',
-  receiving: 'Receiving voucher',
+  order: 'Sale / order',
+  receiving: 'Receiving',
   inventory: 'Inventory',
-  unknown: 'Unknown screen',
+  unknown: 'BridalLive',
 }
 
 export function detectContext(
@@ -22,29 +21,24 @@ export function detectContext(
 
   if (devOverride) {
     screen = devOverride
-    hints.push('Developer screen override active')
+    hints.push('Home is using the practice screen chosen in Settings.')
   } else if (matchesReceiving(combined)) {
     screen = 'receiving'
-    hints.push('Bulk label printing will target lines on this voucher.')
+    hints.push('Open Labels to print from this receiving voucher.')
   } else if (matchesOrder(combined)) {
     screen = 'order'
-    hints.push('Use Inventory to look up or add size/color without leaving this order.')
+    hints.push('Look up a style or add a size and color without leaving this sale.')
   } else if (matchesInventory(combined)) {
     screen = 'inventory'
-    hints.push('Reprint labels or verify item numbers from inventory.')
   } else {
-    hints.push('Navigate to an order, receiving voucher, or inventory screen for best results.')
+    hints.push('Open a sale, receiving voucher, or inventory page for the most helpful shortcuts.')
   }
 
   const orderLine =
     screen === 'order' || devOverride === 'order' ? readOrderLineHints() ?? undefined : undefined
 
   if (screen === 'order' && orderLine) {
-    hints.push('Order line detected — search fields can be prefilled from the active line.')
-  } else if (screen === 'order' && !orderSelectorsConfigured()) {
-    hints.push(
-      'Order line selectors not configured yet; copy item # manually or add selectors in the extension.',
-    )
+    hints.push('Search can be filled in from the line you are working.')
   }
 
   return {

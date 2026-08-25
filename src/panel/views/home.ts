@@ -5,14 +5,13 @@ export const renderHome: ViewRender = (root) => {
   const section = document.createElement('section')
   section.className = 'view view-home'
   section.innerHTML = `
-    <h2 class="view-title">Current screen</h2>
+    <h2 class="view-title">Home</h2>
     <div id="blh-home-context" class="context-card">
-      <p class="muted">Loading context…</p>
+      <p class="muted">Opening BridalLive…</p>
     </div>
-    <p class="muted small mvp-note">MVP demo: mock catalog only. Phase 2 = BridalLive API swap (no UI rewrite).</p>
     <h3 class="subheading">Quick actions</h3>
     <ul class="action-list">
-      <li><button type="button" class="btn btn-secondary" data-nav="inventory">Look up style / size / color</button></li>
+      <li><button type="button" class="btn btn-secondary" data-nav="inventory">Look up a style, size, or color</button></li>
       <li><button type="button" class="btn btn-secondary" data-nav="labels">Print labels</button></li>
     </ul>
   `
@@ -20,15 +19,34 @@ export const renderHome: ViewRender = (root) => {
   root.appendChild(section)
 
   const paint = () => {
-    const el = section.querySelector('#blh-home-context')
+    const el = section.querySelector('#blh-home-context') as HTMLElement | null
     const context = getPanelContext()
-    if (!el || !context) return
+    if (!el) return
+    if (!context) {
+      el.hidden = false
+      el.innerHTML = `<p class="muted">Open a BridalLive tab to see which screen you are on.</p>`
+      return
+    }
+
+    const hints = context.hints.filter(
+      (h) => !/look up an item number here/i.test(h) && !/reprint its label/i.test(h),
+    )
+    const isInventoryScreen =
+      context.screen === 'inventory' || context.screenLabel.trim().toLowerCase() === 'inventory'
+
+    if (isInventoryScreen) {
+      el.hidden = true
+      el.innerHTML = ''
+      return
+    }
+
+    el.hidden = false
+    const hintList = hints.length
+      ? `<ul class="hint-list">${hints.map((h) => `<li>${escapeHtml(h)}</li>`).join('')}</ul>`
+      : ''
     el.innerHTML = `
       <p class="context-screen">${escapeHtml(context.screenLabel)}</p>
-      <p class="context-url">${escapeHtml(context.url)}</p>
-      <ul class="hint-list">
-        ${context.hints.map((h) => `<li>${escapeHtml(h)}</li>`).join('')}
-      </ul>
+      ${hintList}
     `
   }
 

@@ -1,8 +1,8 @@
-Load this extension in Chrome from the dist/ folder after building:
+Install BridalLive Helper from the dist/ folder after building:
 
   npm install
   npm run build
 
-Then: chrome://extensions → Developer mode → Load unpacked → select the dist/ folder.
+Then in Chrome: chrome://extensions → Developer mode → Load unpacked → choose dist/
 
-For development with HMR, run `npm run dev` and load unpacked from dist/ (CRXJS updates on save).
+Open https://app.bridallive.com and click the BL button (or the Helper toolbar icon).

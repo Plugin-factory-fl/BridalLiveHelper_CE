@@ -61,7 +61,7 @@ export async function printLabelBatch(
       return {
         ok: false,
         message:
-          'Could not load item details from BridalLive for this label. Check the vendor item name and API credentials.',
+          'Could not load item details from BridalLive for this label. Check the vendor item name, or reconnect this location in Settings.',
         labelCount: 0,
         pageCount: 0,
       }
@@ -80,7 +80,7 @@ export async function printLabelBatch(
   const mode =
     source === 'mock'
       ? 'Print at 100% scale — do not use Fit to page.'
-      : 'Prices and variants loaded from BridalLive. Print at 100% scale — do not use Fit to page.'
+      : 'Prices and sizes loaded from BridalLive. Print at 100% scale — do not use Fit to page.'
 
   const layoutHint =
     styleLayoutId === AUTO_STYLE_LAYOUT_ID

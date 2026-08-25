@@ -151,7 +151,7 @@ async function search(
   const locations = await locationsToSearch(q.locationId || undefined, storeId)
   if (locations.length === 0) {
     throw new Error(
-      'No BridalLive API credentials configured. Add Retailer ID and API key in Settings.',
+      'Connect this location in Settings first. Paste the Retailer ID and API key from BridalLive (Settings → Account → API).',
     )
   }
 
@@ -320,7 +320,7 @@ async function createVariant(
 
   const creds = await resolveLocationCredentials(source.location.id)
   if (!creds) {
-    return { ok: false, message: `No API credentials for ${source.location.name}.` }
+    return { ok: false, message: `No connection saved for ${source.location.name}. Open Settings to connect this location.` }
   }
 
   const body = buildVariantCreateBody(source.item, size, color, {
@@ -378,8 +378,8 @@ async function createVariant(
         itemNumber,
         saleSearchQuery: mapped.saleSearchQuery || itemNumber,
         message:
-          `Variant created as ${itemNumber} at ${source.location.name}, but it is not yet visible in item search. ` +
-          `Open BridalLive Items, search item #${itemNumber}, and confirm Vendor Item Name is “${vendorItemName}”.`,
+          `Added as ${itemNumber} at ${source.location.name}, but it is not in item search yet. ` +
+          `In BridalLive Items, search item #${itemNumber} and confirm Vendor Item Name is “${vendorItemName}”.`,
       }
     }
   } catch {
@@ -391,8 +391,8 @@ async function createVariant(
     itemNumber,
     saleSearchQuery: mapped.saleSearchQuery || itemNumber,
     message:
-      `Variant created in BridalLive: ${itemNumber} at ${source.location.name}` +
-      ` (vendor item name: ${vendorItemName}). Use ⊕ Add to order if you want it on the open sale.`,
+      `Added in BridalLive: ${itemNumber} at ${source.location.name}` +
+      ` (vendor item name: ${vendorItemName}). Use ⊕ to add it to the open sale.`,
   }
 }
 

@@ -12,10 +12,10 @@ function setStatus(text: string, isError = false): void {
 openBtn.addEventListener('click', async () => {
   const res = await chrome.runtime.sendMessage({ action: 'open-side-panel' })
   if (!res?.ok) {
-    setStatus(res?.error ?? 'Could not open side panel.', true)
+    setStatus(res?.error ?? 'Could not open the Helper.', true)
     return
   }
-  setStatus('Side panel opened.')
+  setStatus('Helper opened.')
   window.close()
 })
 
@@ -25,4 +25,4 @@ settingsBtn.addEventListener('click', async () => {
   window.close()
 })
 
-setStatus('Use the toolbar icon or Open panel below.')
+setStatus('Click Open Helper, or the Helper icon in the toolbar.')

@@ -1,6 +1,9 @@
 import { STORAGE_KEYS } from './config'
 import { AUTO_STYLE_LAYOUT_ID } from '../labels/style-layouts'
 
+export const LABELS_SUB_TABS = ['receiving', 'mass', 'reprint'] as const
+export type LabelsSubTab = (typeof LABELS_SUB_TABS)[number]
+
 export type LabelsUiState = {
   startRow: number
   startCol: number
@@ -15,6 +18,7 @@ export type LabelsUiState = {
   statusKind: '' | 'success' | 'error'
   /** Scroll position of `.panel-main` while on Labels view. */
   scrollTop: number
+  activeSubTab: LabelsSubTab
 }
 
 const DEFAULTS: LabelsUiState = {
@@ -29,6 +33,7 @@ const DEFAULTS: LabelsUiState = {
   statusText: '',
   statusKind: '',
   scrollTop: 0,
+  activeSubTab: 'receiving',
 }
 
 export async function loadLabelsUiState(): Promise<LabelsUiState> {
@@ -37,11 +42,15 @@ export async function loadLabelsUiState(): Promise<LabelsUiState> {
     reprintVendorItemName?: string
   } | undefined
   if (!raw) return { ...DEFAULTS }
+  const activeSubTab = LABELS_SUB_TABS.includes(raw.activeSubTab as LabelsSubTab)
+    ? (raw.activeSubTab as LabelsSubTab)
+    : DEFAULTS.activeSubTab
   return {
     ...DEFAULTS,
     ...raw,
     receivingSelected: raw.receivingSelected ?? {},
     reprintItemNumber: raw.reprintItemNumber || raw.reprintVendorItemName || '',
+    activeSubTab,
   }
 }
 

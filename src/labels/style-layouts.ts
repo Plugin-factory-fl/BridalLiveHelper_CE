@@ -105,16 +105,15 @@ export function layoutOptionsForDropdown(): Array<{
   const options: Array<{ value: string; label: string; group: string }> = [
     {
       value: AUTO_STYLE_LAYOUT_ID,
-      label: 'Auto — match each line by department',
+      label: 'Auto — match dresses, shoes, and jewelry',
       group: 'Recommended',
     },
   ]
   for (const dept of DEPARTMENTS) {
     for (const layout of LABEL_STYLE_LAYOUTS.filter((l) => l.department === dept)) {
-      const tag = layout.status === 'placeholder' ? ' (placeholder)' : ''
       options.push({
         value: layout.id,
-        label: `${layout.name}${tag}`,
+        label: layout.name,
         group: dept,
       })
     }

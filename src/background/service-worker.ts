@@ -386,7 +386,7 @@ async function handleMessage(
         : null
     const ctx = fromMessage ?? (await resolvePrintPreviewBlTab())
     if (!ctx) {
-      return { ok: false, error: 'Open BridalLive with the side panel first.' }
+      return { ok: false, error: 'Open BridalLive with the Helper first.' }
     }
     await savePrintPreviewSession({
       windowId: ctx.windowId,
@@ -449,7 +449,7 @@ async function handleMessage(
     return forwardToTab(tab.id, message)
   }
 
-  return { ok: false, error: 'Open app.bridallive.com in a tab first.' }
+  return { ok: false, error: 'Open BridalLive in a tab first.' }
 }
 
 async function resolveTabId(tabId?: number): Promise<number | undefined> {
@@ -478,7 +478,7 @@ async function openSidePanelForTab(
       ok: false,
       error:
         errMsg ||
-        'Click the BridalLive Helper icon in the toolbar to open the panel.',
+        'Click the BridalLive Helper icon in the toolbar to open it.',
     }
   }
 }

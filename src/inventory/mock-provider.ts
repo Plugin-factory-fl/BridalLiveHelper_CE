@@ -134,11 +134,11 @@ async function createVariant(
   }
   MOCK_ITEMS.push(newItem)
 
-  let message = `Variant created: ${itemNumber}`
+  let message = `Added: ${itemNumber}`
   if (source) {
     message += ` for ${source.style} (based on ${source.itemNumber})`
   }
-  message += '. Phase 2 will save to BridalLive.'
+  message += '. Connect your store in Settings to save new items to BridalLive.'
 
   return {
     ok: true,

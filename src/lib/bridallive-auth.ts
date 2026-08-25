@@ -106,7 +106,7 @@ export async function getBridalLiveSession(
   const resolved = await resolveLocationCredentials(storeId)
   if (!resolved) {
     throw new Error(
-      'No BridalLive API credentials configured. Add Retailer ID and API key in Settings.',
+      'Connect this location in Settings first. Paste the Retailer ID and API key from BridalLive (Settings → Account → API).',
     )
   }
 
@@ -119,8 +119,11 @@ export async function getBridalLiveSession(
 
 export async function testBridalLiveConnection(storeId?: string): Promise<string> {
   const session = await getBridalLiveSession(storeId)
-  const envLabel = session.environment === 'production' ? 'Production' : 'QA'
-  return `Connected to ${envLabel} (${session.locationId}). Token OK.`
+  const settings = await loadBridalLiveApiSettings()
+  const location =
+    settings.locations.find((l) => l.id === session.locationId)?.name ?? session.locationId
+  const envLabel = session.environment === 'production' ? 'your live store' : 'the practice environment'
+  return `Connected to ${location} in ${envLabel}.`
 }
 
 export async function bridalLiveFetch<T>(
@@ -155,8 +158,9 @@ export async function bridalLiveFetch<T>(
   }
 
   if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`BridalLive ${path} failed (${res.status}): ${body.slice(0, 300)}`)
+    throw new Error(
+      `BridalLive could not complete this request (${res.status}). Check your connection in Settings, or try again.`,
+    )
   }
 
   if (res.status === 204) return undefined as T

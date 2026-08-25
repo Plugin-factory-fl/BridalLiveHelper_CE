@@ -1,51 +1,32 @@
-# Inventory & special orders pillar
+# Using Inventory
 
-Client goal (Ricky): staff on **order/POS** screens need a **side workstation** to look up items, catch duplicates, and add size/color variants without leaving the order.
+Staff on a sale need a side workstation: look up an item, catch a duplicate size/color, and add a new variant without leaving the order.
 
-## MVP vs Phase 2
+Connect your stores in [Settings](./SETUP.md) so search uses live BridalLive inventory.
 
-| | **MVP (now)** | **Phase 2** |
-|---|----------------|-------------|
-| Data | `mockInventoryProvider` | `bridalliveInventoryProvider` |
-| Panel UI | Complete workflows | **Unchanged** |
-| Swap surface | `src/inventory/provider.ts` | Implement `bridallive-inventory-provider.ts` |
+## Search
 
-See [MVP_ROADMAP.md](./MVP_ROADMAP.md) for the full checklist and demo script.
+1. Open **Inventory** in the Helper.
+2. Filter by location, department, name, vendor item name, item #, vendor, size, or color.
+3. Click **Search**. Leave the fields empty to browse all items.
+4. Click a column header to sort. Drag a column edge to resize. Choose visible columns in **Settings**.
 
-## Requirements vs current build
+On a sale, the Helper can prefill search from the line you are working.
 
-| Requirement | MVP status |
-|---------------|------------|
-| Side workstation on orders | Done |
-| Search by style, vendor, size, color, item # | Done (100 real SKUs from `items.xls` in mock catalog) |
-| Duplicate warning | Done |
-| Add variants + clone from source | Done (mock; appends to in-memory catalog) |
-| Order context banner + prefill | Done (selectors optional) |
-| Copy / apply item # to order | Clipboard + apply when selectors set |
-| Item photos in results (Image column) | Placeholder now; `imageUrl` via Item Picture API in Phase 2 |
-| Live BridalLive data | Phase 2 |
+## Add another size or color
 
-## Architecture
+1. Find an existing item for that style.
+2. Click **+** on the row.
+3. Confirm the **vendor item name** (the manufacturer / vendor style name). BridalLive needs this to find the new item later.
+4. Enter the **new size** and **new color**.
+5. Save. The Helper checks that this size and color are not already in stock, then creates the item in BridalLive.
 
-```
-Panel → MSG.* → bridge → inventory/service.ts → getInventoryProvider()
-                                                    ├── mock (MVP)
-                                                    ├── render (optional env)
-                                                    └── bridallive (Phase 2 stub)
-```
+## Add to the open sale
 
-## Testing the MVP demo
+On a sale screen, each result also has **⊕**. That adds the item to the order you have open in BridalLive. Keep the sale tab in front while you add.
 
-1. `app.bridallive.com` → open side panel
-2. Settings → Dev override → **Order / POS**
-3. Inventory → search item # `49153` or style `CB91978J` → pick a row → **Add to order** on a live Sale
-4. Add variant size `14` → new mock item #; search again to see it listed
-5. **Use as source** on a row → variant form prefilled
+## Tips
 
-## Phase 2 (BridalLive API only)
-
-1. Elite API credentials in Settings
-2. Implement auth + Swagger endpoints in `bridallive-inventory-provider.ts`
-3. Set `VITE_BRIDALLIVE_API=true` or runtime config
-
-DOM selectors ([BRIDALLIVE_CONTEXT.md](./BRIDALLIVE_CONTEXT.md)) remain useful for **apply to order line** even when inventory uses the API.
+- Search across **All locations** when you are not sure which boutique has the piece.
+- If nothing loads, open **Settings** and confirm that location is connected, then use **Live store** for real inventory.
+- Copy name, vendor item name, or item # with the copy control in that cell.

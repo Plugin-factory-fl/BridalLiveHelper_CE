@@ -22,11 +22,11 @@ export async function resolveDataSource(): Promise<DataSource> {
 export function getDataSourceLabel(source: DataSource = getDataSource()): string {
   switch (source) {
     case 'bridallive':
-      return 'BridalLive API'
+      return 'Connected to BridalLive'
     case 'render':
-      return 'Custom backend'
+      return 'Connected to your store system'
     default:
-      return 'Mock data (MVP)'
+      return 'Sample catalog (not connected)'
   }
 }
 

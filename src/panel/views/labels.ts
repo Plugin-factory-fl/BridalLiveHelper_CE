@@ -1,4 +1,8 @@
-import { loadLabelsUiState, saveLabelsUiState } from '../../lib/labels-ui-state'
+import {
+  loadLabelsUiState,
+  saveLabelsUiState,
+  type LabelsSubTab,
+} from '../../lib/labels-ui-state'
 import type { LabelLineItem } from '../../api/types'
 import type { ReceivingVoucherLine } from '../../labels/types'
 import { printLabelBatch } from '../../labels/print-batch'
@@ -64,33 +68,48 @@ export const renderLabels: ViewRender = (root) => {
 
   section.innerHTML = `
     <h2 class="view-title">Labels</h2>
-    <p class="muted small">${escapeHtml(AVERY_5160.name)} · PDF opens in a print-preview tab.</p>
+    <p class="muted small">${escapeHtml(AVERY_5160.name)} · A print preview opens in a new tab.</p>
 
-    <fieldset class="fieldset labels-block labels-block--style">
-      <legend>Label style layout</legend>
-      <label class="label-style-picker">
-        <span class="label-style-picker-label">Design</span>
-        <select id="blh-label-style-layout" name="styleLayout">${styleOptions}</select>
-      </label>
-      <div id="blh-label-style-preview" class="label-style-preview" aria-live="polite"></div>
-    </fieldset>
+    <div class="labels-subnav" role="tablist" aria-label="Label tools">
+      <button
+        type="button"
+        class="labels-subnav-btn active"
+        role="tab"
+        id="blh-labels-tab-receiving"
+        data-subtab="receiving"
+        aria-controls="blh-labels-panel-receiving"
+        aria-selected="true"
+      >Receiving Voucher</button>
+      <button
+        type="button"
+        class="labels-subnav-btn"
+        role="tab"
+        id="blh-labels-tab-mass"
+        data-subtab="mass"
+        aria-controls="blh-labels-panel-mass"
+        aria-selected="false"
+        tabindex="-1"
+      >Mass Labeling</button>
+      <button
+        type="button"
+        class="labels-subnav-btn"
+        role="tab"
+        id="blh-labels-tab-reprint"
+        data-subtab="reprint"
+        aria-controls="blh-labels-panel-reprint"
+        aria-selected="false"
+        tabindex="-1"
+      >Reprint Label</button>
+    </div>
 
-    <fieldset class="fieldset labels-block">
-      <legend>Sheet start position</legend>
-      <p class="muted small">On a partially used sheet, click the first empty label. Printing fills left-to-right from there.</p>
-      <div class="label-grid-wrap">
-        <div id="blh-label-grid" class="label-grid" role="grid" aria-label="Avery label start position"></div>
-      </div>
-      <p class="muted small label-grid-caption">Start: row <strong id="blh-start-row">1</strong>, column <strong id="blh-start-col">1</strong></p>
-    </fieldset>
-
-    <section class="labels-block labels-block--primary" aria-labelledby="blh-receiving-heading">
-      <div class="labels-block-header">
-        <h3 class="subheading" id="blh-receiving-heading">Receiving voucher</h3>
-        <span class="labels-badge labels-badge--primary">Main workflow</span>
-      </div>
+    <section
+      class="labels-tab-panel labels-block labels-block--primary"
+      id="blh-labels-panel-receiving"
+      role="tabpanel"
+      aria-labelledby="blh-labels-tab-receiving"
+    >
       <p class="labels-lead">
-        Load real BridalLive receiving vouchers by location, select lines, and bulk-print labels — one label per received quantity.
+        Choose a location and voucher, pick the lines you need, then print one label for each received piece.
       </p>
       <div id="blh-labels-context-banner" class="banner banner-info" hidden></div>
       <div class="form-grid form-grid--compact receiving-controls">
@@ -109,14 +128,27 @@ export const renderLabels: ViewRender = (root) => {
       <p class="muted small" id="blh-receiving-hint">Choose a location to load vouchers…</p>
       <ul id="blh-labels-receiving-list" class="receiving-lines"></ul>
       <button type="button" class="btn btn-primary btn-block" id="blh-labels-receiving">
-        Print selected lines (PDF)
+        Print selected labels
       </button>
     </section>
 
-    <section class="labels-block labels-block--reprint" aria-labelledby="blh-reprint-heading">
-      <h3 class="subheading" id="blh-reprint-heading">Reprint label</h3>
+    <section
+      class="labels-tab-panel"
+      id="blh-labels-panel-mass"
+      role="tabpanel"
+      aria-labelledby="blh-labels-tab-mass"
+      hidden
+    ></section>
+
+    <section
+      class="labels-tab-panel labels-block labels-block--reprint"
+      id="blh-labels-panel-reprint"
+      role="tabpanel"
+      aria-labelledby="blh-labels-tab-reprint"
+      hidden
+    >
       <p class="muted small">
-        Look up by <strong>item #</strong> in BridalLive. Price, size, color, variants, and barcode are loaded from the API.
+        Look up an <strong>item #</strong>. Price, size, color, and barcode come from BridalLive.
       </p>
       <form id="blh-labels-reprint-form" class="form-grid form-grid--compact">
         <label>Item #
@@ -129,11 +161,31 @@ export const renderLabels: ViewRender = (root) => {
           />
         </label>
         <label>Quantity <input name="quantity" type="number" min="1" value="1" /></label>
-        <button type="submit" class="btn btn-reprint">Reprint (PDF)</button>
+        <button type="submit" class="btn btn-reprint">Reprint label</button>
       </form>
     </section>
 
     <p id="blh-labels-status" class="status" role="status"></p>
+
+    <div class="labels-shared">
+      <fieldset class="fieldset labels-block labels-block--style">
+        <legend>Label design</legend>
+        <label class="label-style-picker">
+          <span class="label-style-picker-label">Design</span>
+          <select id="blh-label-style-layout" name="styleLayout">${styleOptions}</select>
+        </label>
+        <div id="blh-label-style-preview" class="label-style-preview" aria-live="polite"></div>
+      </fieldset>
+
+      <fieldset class="fieldset labels-block">
+        <legend>Where to start on the sheet</legend>
+        <p class="muted small">On a partly used sheet, click the first empty label. Printing fills left to right from there.</p>
+        <div class="label-grid-wrap">
+          <div id="blh-label-grid" class="label-grid" role="grid" aria-label="Starting label on the sheet"></div>
+        </div>
+        <p class="muted small label-grid-caption">Start: row <strong id="blh-start-row">1</strong>, column <strong id="blh-start-col">1</strong></p>
+      </fieldset>
+    </div>
   `
 
   root.appendChild(section)
@@ -141,6 +193,7 @@ export const renderLabels: ViewRender = (root) => {
   let startRow = 1
   let startCol = 1
   let labelStyleLayoutId = AUTO_STYLE_LAYOUT_ID
+  let activeSubTab: LabelsSubTab = 'receiving'
   let receivingLines: ReceivingVoucherLine[] = []
   let selectionByItem: Record<string, boolean> = {}
   let receivingLocationId = ''
@@ -169,6 +222,7 @@ export const renderLabels: ViewRender = (root) => {
       reprintQuantity: Number(fd.get('quantity')) || 1,
       receivingLocationId,
       receivingVoucherId,
+      activeSubTab,
       statusText: statusEl.textContent ?? '',
       statusKind: statusEl.classList.contains('success')
         ? 'success'
@@ -190,7 +244,7 @@ export const renderLabels: ViewRender = (root) => {
           <li>Shoes → Shoes — Standard</li>
           <li>Jewelry → Jewelry — Standard</li>
         </ul>
-        <p class="label-style-preview-note muted small">Best for mixed receiving vouchers.</p>
+        <p class="label-style-preview-note muted small">Best when a voucher mixes dresses, shoes, and jewelry.</p>
       `
       return
     }
@@ -201,23 +255,37 @@ export const renderLabels: ViewRender = (root) => {
       return
     }
 
-    const statusBadge =
-      layout.status === 'placeholder'
-        ? '<span class="label-style-preview-badge">Placeholder — swap when client design arrives</span>'
-        : '<span class="label-style-preview-badge label-style-preview-badge--client">Client design</span>'
-
     stylePreview.innerHTML = `
       <div class="label-style-preview-header">
         <p class="label-style-preview-title">${escapeHtml(layout.name)}</p>
         <span class="tag">${escapeHtml(layout.department)}</span>
       </div>
-      ${statusBadge}
       <p class="label-style-preview-desc">${escapeHtml(layout.description)}</p>
-      <p class="label-style-preview-fields-label">Fields on label</p>
+      <p class="label-style-preview-fields-label">Fields on the label</p>
       <ul class="label-style-preview-fields">
         ${layout.fields.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}
       </ul>
     `
+  }
+
+  const paintSubTab = () => {
+    section.querySelectorAll<HTMLButtonElement>('.labels-subnav-btn').forEach((btn) => {
+      const isActive = btn.dataset.subtab === activeSubTab
+      btn.classList.toggle('active', isActive)
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false')
+      btn.tabIndex = isActive ? 0 : -1
+    })
+    section.querySelectorAll<HTMLElement>('.labels-tab-panel').forEach((panel) => {
+      const panelTab = panel.id.replace('blh-labels-panel-', '') as LabelsSubTab
+      panel.hidden = panelTab !== activeSubTab
+    })
+  }
+
+  const setActiveSubTab = (tab: LabelsSubTab) => {
+    if (activeSubTab === tab) return
+    activeSubTab = tab
+    paintSubTab()
+    persistUiState()
   }
 
   const paintStartLabels = () => {
@@ -256,10 +324,12 @@ export const renderLabels: ViewRender = (root) => {
     startRow = saved.startRow
     startCol = saved.startCol
     labelStyleLayoutId = saved.labelStyleLayoutId ?? AUTO_STYLE_LAYOUT_ID
+    activeSubTab = saved.activeSubTab ?? 'receiving'
     selectionByItem = { ...saved.receivingSelected }
     receivingLocationId = saved.receivingLocationId
     receivingVoucherId = saved.receivingVoucherId
     styleSelect.value = labelStyleLayoutId
+    paintSubTab()
     paintStartLabels()
     paintStylePreview()
 
@@ -284,7 +354,7 @@ export const renderLabels: ViewRender = (root) => {
     if (ctx?.screen === 'receiving') {
       banner.hidden = false
       banner.textContent =
-        'Receiving screen is open in BridalLive — pick the matching voucher below to print labels.'
+        'Receiving is open in BridalLive — pick the matching voucher below to print labels.'
     } else {
       banner.hidden = true
     }
@@ -330,12 +400,12 @@ export const renderLabels: ViewRender = (root) => {
     const configured = settings.locations.filter(isLocationConfigured)
     if (configured.length === 0) {
       locationSelect.innerHTML =
-        '<option value="">Add API credentials in Settings</option>'
+        '<option value="">Connect this location in Settings</option>'
       locationSelect.disabled = true
       voucherSelect.innerHTML = '<option value="">—</option>'
       voucherSelect.disabled = true
       receivingHint.textContent =
-        'Save Production Retailer ID + API key for each location in Settings, then refresh.'
+        'Connect each location in Settings (Retailer ID and API key), choose Live store, then refresh.'
       return false
     }
 
@@ -360,7 +430,7 @@ export const renderLabels: ViewRender = (root) => {
       return
     }
 
-    receivingHint.textContent = 'Loading voucher lines from BridalLive…'
+      receivingHint.textContent = 'Loading voucher lines…'
     try {
       const lines = await getReceivingVoucherLines(
         receivingVoucherId,
@@ -381,13 +451,13 @@ export const renderLabels: ViewRender = (root) => {
       receivingLines = []
       renderReceivingList()
       receivingHint.textContent =
-        err instanceof Error ? err.message : 'Failed to load voucher lines.'
+        err instanceof Error ? err.message : 'Could not load voucher lines.'
     }
   }
 
   const loadVouchersForLocation = async () => {
     if (!receivingLocationId) return
-    receivingHint.textContent = 'Loading receiving vouchers from BridalLive…'
+    receivingHint.textContent = 'Loading receiving vouchers…'
     voucherSelect.disabled = true
     try {
       receivingVouchers = await listReceivingVouchers(receivingLocationId)
@@ -406,7 +476,7 @@ export const renderLabels: ViewRender = (root) => {
       receivingLines = []
       renderReceivingList()
       receivingHint.textContent =
-        err instanceof Error ? err.message : 'Failed to load receiving vouchers.'
+        err instanceof Error ? err.message : 'Could not load receiving vouchers.'
     }
   }
 
@@ -419,7 +489,7 @@ export const renderLabels: ViewRender = (root) => {
   const renderReceivingList = () => {
     const list = section.querySelector('#blh-labels-receiving-list') as HTMLElement
     if (receivingLines.length === 0) {
-      list.innerHTML = '<li class="muted receiving-line-empty">No lines loaded.</li>'
+      list.innerHTML = '<li class="muted receiving-line-empty">No lines on this voucher.</li>'
       return
     }
     list.innerHTML = receivingLines
@@ -467,7 +537,7 @@ export const renderLabels: ViewRender = (root) => {
       return
     }
     persistUiState()
-    setStatus('Generating PDF…', '')
+    setStatus('Preparing labels…', '')
     try {
       const result = await printLabelBatch({
         styleLayoutId: labelStyleLayoutId,
@@ -479,7 +549,7 @@ export const renderLabels: ViewRender = (root) => {
       })
       setStatus(result.message, result.ok ? 'success' : 'error')
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : 'Print failed', 'error')
+      setStatus(e instanceof Error ? e.message : 'Could not print these labels', 'error')
     }
   }
 
@@ -487,6 +557,13 @@ export const renderLabels: ViewRender = (root) => {
     labelStyleLayoutId = styleSelect.value
     paintStylePreview()
     persistUiState()
+  })
+
+  section.querySelectorAll<HTMLButtonElement>('.labels-subnav-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.subtab as LabelsSubTab | undefined
+      if (tab) setActiveSubTab(tab)
+    })
   })
 
   void (async () => {
@@ -534,19 +611,19 @@ export const renderLabels: ViewRender = (root) => {
     const creds = await getActiveBridalLiveCredentials()
     if (!creds) {
       setStatus(
-        'Add BridalLive API credentials in Settings (Production) before reprinting live labels.',
+        'Connect your store in Settings and choose Live store before reprinting live labels.',
         'error',
       )
       return
     }
 
-    setStatus(`Looking up item #${itemNumber} in BridalLive…`, '')
+    setStatus(`Looking up item #${itemNumber}…`, '')
     try {
       const storeId = receivingLocationId || creds.location.id
       const match = await lookupInventoryByItemNumber(itemNumber, storeId)
       if (!match) {
         setStatus(
-          `No inventory found for item #${itemNumber} at ${storeId}.`,
+          `No item #${itemNumber} found at this location.`,
           'error',
         )
         return
@@ -557,7 +634,7 @@ export const renderLabels: ViewRender = (root) => {
         'Enter an item # to reprint.',
       )
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Lookup failed', 'error')
+      setStatus(err instanceof Error ? err.message : 'Could not look up that item', 'error')
     }
   })
 
@@ -591,7 +668,7 @@ export const renderLabels: ViewRender = (root) => {
         department: l.department,
         vendorItemName: l.vendorItemName,
       })),
-      'Select at least one receiving line.',
+      'Select at least one line to print.',
     )
   })
 

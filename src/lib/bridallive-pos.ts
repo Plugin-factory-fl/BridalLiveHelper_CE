@@ -138,7 +138,7 @@ export async function addInventoryItemToPosTransaction(options: {
   if (!item?.id) {
     return {
       ok: false,
-      message: `Could not find inventory item ${itemNumber} via BridalLive API.`,
+      message: `Could not find item #${itemNumber} in BridalLive.`,
     }
   }
 
@@ -183,6 +183,6 @@ export async function addInventoryItemToPosTransaction(options: {
     ok: true,
     itemNumber: resolvedNumber,
     trxNumber: trx.trxNumber,
-    message: `Added item #${resolvedNumber} to sale${trx.trxNumber ? ` #${trx.trxNumber}` : ''} via BridalLive API.`,
+    message: `Added item #${resolvedNumber} to sale${trx.trxNumber ? ` #${trx.trxNumber}` : ''}.`,
   }
 }
