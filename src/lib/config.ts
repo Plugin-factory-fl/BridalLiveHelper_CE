@@ -5,7 +5,7 @@ export const PANEL_MAX_WIDTH = 640
 
 export const HOST_PATTERNS = [
   'https://app.bridallive.com/*',
-  'https://*.bridallive.com/*',
+  'https://qa.bridallive.com/*',
 ] as const
 
 export const BRIDALLIVE_ORIGINS = [

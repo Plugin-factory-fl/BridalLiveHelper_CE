@@ -50,15 +50,53 @@ Version 0.0.1.
 Help bridal boutique staff look up BridalLive inventory and print labels beside the BridalLive page.
 ```
 
-## 3. Permission justifications
+## 3. Permission justifications (paste these)
 
-Chrome will ask why each permission exists.
+There is **no** `<all_urls>` permission. Do not add one.
 
-- **storage** — Save the staff Helper sign-in, working boutique, text size, and inventory column choices on that computer.
-- **tabs** — Find the open BridalLive tab so the side panel can sit beside it and add an item to the sale on that tab.
-- **sidePanel** — Show the Helper next to BridalLive.
-- **https://app.bridallive.com/** and **https://*.bridallive.com/** — Run on the BridalLive app (content script and the BL button). Not used on unrelated sites.
-- **https://bridallivehelper-ce.onrender.com/** — Talk to this shop’s Helper server for sign-in and live inventory.
+### Are you using remote code?
+
+**No.**
+
+The zip only runs JavaScript built into the extension. Network calls are JSON APIs to BridalLive and the Helper server. The extension does not download or execute scripts from the internet.
+
+### API permissions
+
+**storage**
+```
+Saves the staff Helper sign-in token, working boutique, text size, and inventory column choices on that computer.
+```
+
+**tabs**
+```
+Finds the open BridalLive tab (app.bridallive.com or qa.bridallive.com) so the side panel can sit beside it and add an item to the sale on that tab.
+```
+
+**sidePanel**
+```
+Shows BridalLive Helper next to the BridalLive page. That is the product.
+```
+
+### Host permissions (exact strings from the manifest)
+
+**https://app.bridallive.com/***
+```
+Live BridalLive shop. Content script injects the BL button and talks to the open sale or receiving screen. Host access is required to message that tab.
+```
+
+**https://qa.bridallive.com/***
+```
+BridalLive practice (QA) environment. Same Helper features when staff use Practice instead of Live. Not used on other websites.
+```
+
+**https://bridallivehelper-ce.onrender.com/***
+```
+This shop’s Helper server. Sign-in, working location, and live inventory/label requests go here. BridalLive API keys stay on that server.
+```
+
+### Content script matches (exact strings from the manifest)
+
+Same two BridalLive hosts as above — **https://app.bridallive.com/*** and **https://qa.bridallive.com/***. Not the marketing site, and not all websites.
 
 ## 4. Screenshots (you take these)
 

@@ -31,12 +31,12 @@ export default defineManifest({
   permissions: ['storage', 'tabs', 'sidePanel'],
   host_permissions: [
     'https://app.bridallive.com/*',
-    'https://*.bridallive.com/*',
+    'https://qa.bridallive.com/*',
     'https://bridallivehelper-ce.onrender.com/*',
   ],
   content_scripts: [
     {
-      matches: ['https://app.bridallive.com/*', 'https://*.bridallive.com/*'],
+      matches: ['https://app.bridallive.com/*', 'https://qa.bridallive.com/*'],
       js: ['src/content/bridallive.ts', 'src/content/panel-launcher.ts'],
       css: ['src/content/panel-launcher.css'],
       run_at: 'document_idle',

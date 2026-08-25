@@ -1,4 +1,4 @@
-import { isBridalLiveAppUrl, STORAGE_KEYS } from '../lib/config'
+import { HOST_PATTERNS, isBridalLiveAppUrl, STORAGE_KEYS } from '../lib/config'
 import { MSG, type ExtensionMessage, type ExtensionResponse } from '../lib/messages'
 
 async function getPinnedBridalLiveTabId(): Promise<number | undefined> {
@@ -30,7 +30,7 @@ async function getBridalLiveTab(): Promise<chrome.tabs.Tab | undefined> {
     return active
   }
 
-  const tabs = await chrome.tabs.query({ url: ['https://app.bridallive.com/*'] })
+  const tabs = await chrome.tabs.query({ url: [...HOST_PATTERNS] })
   const tab = tabs[0]
   if (tab?.id) await pinBridalLiveTab(tab.id)
   return tab

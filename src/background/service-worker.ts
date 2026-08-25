@@ -1,4 +1,4 @@
-import { isBridalLiveAppUrl, isHelperPrintPreviewUrl, STORAGE_KEYS, type PrintPreviewSession } from '../lib/config'
+import { HOST_PATTERNS, isBridalLiveAppUrl, isHelperPrintPreviewUrl, STORAGE_KEYS, type PrintPreviewSession } from '../lib/config'
 import { log, warn } from '../lib/log'
 import { MSG } from '../lib/messages'
 
@@ -228,7 +228,7 @@ async function hidePanelForWindow(windowId: number): Promise<void> {
   autoHideSuppress++
   try {
     await sidePanelApi.close({ windowId })
-    const tabs = await chrome.tabs.query({ windowId, url: ['https://app.bridallive.com/*'] })
+    const tabs = await chrome.tabs.query({ windowId, url: [...HOST_PATTERNS] })
     for (const tab of tabs) {
       if (tab.id) void notifyLauncherState(tab.id, false)
     }
@@ -517,6 +517,6 @@ async function findBridalLiveTab(): Promise<chrome.tabs.Tab | undefined> {
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (active?.url && isBridalLiveAppUrl(active.url)) return active
 
-  const tabs = await chrome.tabs.query({ url: ['https://app.bridallive.com/*'] })
+  const tabs = await chrome.tabs.query({ url: [...HOST_PATTERNS] })
   return tabs[0]
 }
