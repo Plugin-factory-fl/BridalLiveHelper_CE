@@ -138,7 +138,7 @@ async function createVariant(
   if (source) {
     message += ` for ${source.style} (based on ${source.itemNumber})`
   }
-  message += '. Connect your store in Settings to save new items to BridalLive.'
+  message += '. Sign in on Home to save new items to BridalLive.'
 
   return {
     ok: true,

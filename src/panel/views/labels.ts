@@ -607,7 +607,7 @@ export const renderLabels: ViewRender = (root) => {
     const creds = await getActiveBridalLiveCredentials()
     if (!creds) {
       setStatus(
-        'Connect your store in Settings and choose Live store before reprinting live labels.',
+        'Sign in on Home and pick your working location before reprinting labels.',
         'error',
       )
       return

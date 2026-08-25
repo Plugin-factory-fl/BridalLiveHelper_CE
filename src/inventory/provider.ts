@@ -29,7 +29,7 @@ function providerFor(source: Awaited<ReturnType<typeof resolveDataSource>>): Inv
 }
 
 /**
- * Runtime-selected provider. Uses BridalLive when credentials are saved in Settings
+ * Runtime-selected provider. Uses BridalLive when Home sign-in stored shop keys
  * (or when `VITE_BRIDALLIVE_API=true` at build time).
  */
 export const inventoryProvider: InventoryProvider = {

@@ -151,7 +151,7 @@ async function search(
   const locations = await locationsToSearch(q.locationId || undefined, storeId)
   if (locations.length === 0) {
     throw new Error(
-      'Connect this location in Settings first. Paste the Retailer ID and API key from BridalLive (Settings → Account → API).',
+      'Sign in on Home and pick your working location first.',
     )
   }
 
@@ -320,7 +320,7 @@ async function createVariant(
 
   const creds = await resolveLocationCredentials(source.location.id)
   if (!creds) {
-    return { ok: false, message: `No connection saved for ${source.location.name}. Open Settings to connect this location.` }
+    return { ok: false, message: `No BridalLive connection for ${source.location.name}. Sign in on Home and pick that boutique.` }
   }
 
   const body = buildVariantCreateBody(source.item, size, color, {
@@ -398,7 +398,7 @@ async function createVariant(
 
 /**
  * Live BridalLive inventory provider (Phase 2).
- * Uses Retailer ID + API key from Settings → apiLogin → /api/items/*.
+ * Uses shop keys from Home sign-in → apiLogin → /api/items/*.
  */
 export const bridalliveInventoryProvider: InventoryProvider = {
   search,

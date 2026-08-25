@@ -11,7 +11,7 @@ export function getDataSource(): DataSource {
   return 'mock'
 }
 
-/** Prefer live BridalLive when Settings has Retailer ID + API key. */
+/** Prefer live BridalLive when Home sign-in has stored shop keys. */
 export async function resolveDataSource(): Promise<DataSource> {
   if (import.meta.env.VITE_BRIDALLIVE_API === 'true') return 'bridallive'
   if (await getActiveBridalLiveCredentials()) return 'bridallive'
