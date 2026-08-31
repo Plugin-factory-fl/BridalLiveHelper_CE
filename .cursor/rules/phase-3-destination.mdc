@@ -10,7 +10,7 @@ BridalLive Helper’s finish line is **Phase 3**: a fully working product The Ch
 Read [docs/PHASE_3.md](docs/PHASE_3.md). Staff model:
 
 - **Login is on the Home tab** — employees sign in there
-- **Pick / switch working location** (White Plains or Poughkeepsie); Settings is a location picker, not a place to paste keys
+- **Pick / switch working location** (PLM or Poughkeepsie); Settings is a location picker, not a place to paste keys
 - **Backend holds BridalLive Retailer IDs and API keys** per location
 - Private Chrome Web Store listing for how the shop installs the product
 

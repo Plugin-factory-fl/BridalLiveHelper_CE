@@ -1,10 +1,12 @@
-/** Location shorthand for tables and tags (Poughkeepsie → PK, not PO). */
+/** Location shorthand for tables and tags (Poughkeepsie → PK, PLM stays PLM). */
 export function locationShorthand(name: string): string {
   const key = name.trim().toLowerCase()
   const known: Record<string, string> = {
     poughkeepsie: 'PK',
-    'white plains': 'WP',
-    'white-plains': 'WP',
+    plm: 'PLM',
+    'white plains': 'PLM',
+    'white-plains': 'PLM',
+    wp: 'PLM',
     'main boutique': 'MB',
     'second location': 'SL',
   }

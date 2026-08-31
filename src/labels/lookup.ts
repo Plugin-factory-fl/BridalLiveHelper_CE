@@ -52,6 +52,46 @@ export async function loadCatalogForLabelPrint(
   return [...byId.values()]
 }
 
+/** Search by item #, name, or vendor item name for the reprint picker. */
+export async function searchInventoryForReprint(
+  query: string,
+  storeId?: string,
+): Promise<InventoryItem[]> {
+  const want = query.trim()
+  if (!want) return []
+
+  const resolvedStoreId = storeId || (await getWorkingLocationId())
+  const byId = new Map<string, InventoryItem>()
+  const add = (items: InventoryItem[]) => {
+    for (const item of items) byId.set(item.id, item)
+  }
+
+  const looksLikeItemNumber = /^[\dA-Za-z][\dA-Za-z-]*$/.test(want) && want.length <= 16
+  if (looksLikeItemNumber) {
+    const { items } = await searchInventory(
+      { itemNumber: want, locationId: resolvedStoreId },
+      resolvedStoreId,
+    )
+    add(items)
+  }
+
+  const { items: byName } = await searchInventory(
+    { name: want, locationId: resolvedStoreId },
+    resolvedStoreId,
+  )
+  add(byName)
+
+  if (byId.size === 0) {
+    const { items: byVendorName } = await searchInventory(
+      { vendorItemName: want, locationId: resolvedStoreId },
+      resolvedStoreId,
+    )
+    add(byVendorName)
+  }
+
+  return [...byId.values()]
+}
+
 export function inventoryItemToLabelLine(
   item: InventoryItem,
   quantity: number,

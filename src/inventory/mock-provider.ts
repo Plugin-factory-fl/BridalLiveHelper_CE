@@ -121,6 +121,7 @@ async function createVariant(
     style: payload.styleId,
     vendorItemName: payload.vendorItemName.trim() || source?.vendorItemName || payload.styleId,
     vendor,
+    vendorCode: source?.vendorCode ?? '',
     saleSearchQuery: buildSaleSearchQuery(vendor, itemNumber),
     department: source?.department ?? 'Dress',
     size: payload.size,

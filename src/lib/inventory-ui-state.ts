@@ -4,6 +4,8 @@ import { STORAGE_KEYS } from './config'
 export const INVENTORY_COLUMN_IDS = [
   'name',
   'vendorItemName',
+  'vendor',
+  'vendorCode',
   'itemNumber',
   'department',
   'size',
@@ -34,6 +36,8 @@ export type InventoryUiState = {
 export const DEFAULT_INVENTORY_COLUMNS: InventoryColumnVisibility = {
   name: true,
   vendorItemName: true,
+  vendor: false,
+  vendorCode: true,
   itemNumber: true,
   department: false,
   size: true,
@@ -47,6 +51,8 @@ const DEFAULT_BROWSE_PAGE_SIZE: InventoryBrowsePageSize = 10
 export const INVENTORY_COLUMN_LABELS: Record<InventoryColumnId, string> = {
   name: 'Name',
   vendorItemName: 'Vendor item name',
+  vendor: 'Vendor',
+  vendorCode: 'Vendor code',
   itemNumber: 'Item #',
   department: 'Department',
   size: 'Size',

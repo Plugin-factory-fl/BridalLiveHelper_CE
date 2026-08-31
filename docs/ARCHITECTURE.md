@@ -15,13 +15,12 @@ The Helper is a **Chrome side panel**. Chrome places it next to the BridalLive t
 |-------|----------------|
 | **Home** | Sign in, sign out, and pick the working boutique |
 | Side panel | Inventory, Labels, and Settings |
-| **BL** button on the page | Open or close the Helper (drag to move it) |
-| Chrome toolbar icon | Same as **BL** — opens the Helper |
+| Chrome toolbar icon | Open the Helper |
 
 ## How work gets done
 
 - **Login** is a Helper account (email + password) on Home. It is not the BridalLive password.
-- **Working location** (White Plains or Poughkeepsie) is chosen on Home. Inventory and labels follow that shop.
+- **Working location** (PLM or Poughkeepsie) is chosen on Home. Inventory and labels follow that shop.
 - **Search, new sizes/colors, receiving vouchers, reprints, and add-to-sale** go to the Helper server as `/bl/...`. The server holds each location’s BridalLive Retailer ID and API key, signs into BridalLive, and forwards only allowlisted paths (`/api/items`, `/api/receivingVouchers`, `/api/receivingVoucherItems`, `/api/posTransactions`).
 - **Add to order** still needs the sale you have open in the BridalLive tab.
 - **Labels** build a PDF in the Helper and open Chrome’s print preview.

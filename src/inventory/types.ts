@@ -14,7 +14,7 @@ export type InventoryCreateVariantPayload = {
   sourceItemNumber?: string
   /** BridalLive inventory item id of the source row (preferred for a full GET clone). */
   sourceInventoryItemId?: string
-  /** Location that owns the source item (WP / PK). */
+  /** Location that owns the source item (PLM / PK). */
   sourceLocationId?: string
 }
 

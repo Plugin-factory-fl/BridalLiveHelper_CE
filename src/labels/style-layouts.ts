@@ -23,6 +23,7 @@ const DRESS_FIELDS = [
   'All colors / variants',
   'MSRP (strikethrough)',
   'Sale price',
+  'Store code',
   'Size + color',
   'Barcode',
   'Item #',
@@ -30,7 +31,6 @@ const DRESS_FIELDS = [
 
 const JEWELRY_FIELDS = [
   'Item name',
-  'Color / variant',
   'MSRP (strikethrough)',
   'Store code',
   'Sale price',
@@ -39,10 +39,7 @@ const JEWELRY_FIELDS = [
 ]
 
 const SHOES_FIELDS = [
-  'Item name',
-  'Size',
-  'Vendor',
-  'Sizes in inventory',
+  'Color',
   'Store code',
   'MSRP (strikethrough)',
   'Sale price',
@@ -66,7 +63,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     department: 'Dress',
     name: 'Dress — stock',
     description:
-      'Variants top-left, MSRP struck + sale price bottom-left; size/color, barcode, and item # on the right.',
+      'Variants top-left, struck MSRP with store code and sale price; centered size/color, barcode and item # on the right.',
     fields: DRESS_FIELDS,
     status: 'client',
     previewImage: 'tags/dress.png',
@@ -76,7 +73,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     department: 'Shoes',
     name: 'Shoes',
     description:
-      'Name and size on top, vendor, sizes in inventory, struck MSRP, boxed sale price, barcode on the right.',
+      'Color on top, struck MSRP, boxed sale price, barcode on the right.',
     fields: SHOES_FIELDS,
     status: 'client',
     previewImage: 'tags/shoes.png',
@@ -94,7 +91,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     id: 'jewelry-tag',
     department: 'Jewelry',
     name: 'Jewelry',
-    description: 'Name and color on top, struck MSRP, boxed sale price, barcode and item # on the right.',
+    description: 'Large item name on top, struck MSRP, boxed sale price, barcode and item # on the right.',
     fields: JEWELRY_FIELDS,
     status: 'client',
     previewImage: 'tags/jewelry.png',

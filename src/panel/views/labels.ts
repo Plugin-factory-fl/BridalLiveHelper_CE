@@ -2,13 +2,13 @@ import {
   loadLabelsUiState,
   saveLabelsUiState,
   type LabelsSubTab,
+  type ReprintQueueItem,
 } from '../../lib/labels-ui-state'
 import type { LabelLineItem } from '../../api/types'
 import type { ReceivingVoucherLine } from '../../labels/types'
 import { printLabelBatch } from '../../labels/print-batch'
 import {
-  inventoryItemToLabelLine,
-  lookupInventoryByItemNumber,
+  searchInventoryForReprint,
 } from '../../labels/lookup'
 import { AVERY_5160 } from '../../labels/templates'
 import {
@@ -139,22 +139,33 @@ export const renderLabels: ViewRender = (root) => {
       aria-labelledby="blh-labels-tab-reprint"
       hidden
     >
-      <p class="muted small">
-        Look up an <strong>item #</strong>. Price, size, color, and barcode come from BridalLive.
+      <p class="labels-lead">
+        Search for items, add them to the label list, then print the whole list at once.
       </p>
       <form id="blh-labels-reprint-form" class="form-grid form-grid--compact">
-        <label>Item #
+        <label>Search
           <input
             name="itemNumber"
             type="text"
-            placeholder="e.g. 49153"
+            placeholder="Item #, name, or vendor item name"
             autocomplete="off"
             spellcheck="false"
           />
         </label>
-        <label>Quantity <input name="quantity" type="number" min="1" value="1" /></label>
-        <button type="submit" class="btn btn-reprint">Reprint label</button>
+        <button type="submit" class="btn btn-ghost">Search</button>
       </form>
+      <p class="muted small" id="blh-reprint-search-hint">Enter a search and press Search.</p>
+      <ul id="blh-reprint-results" class="reprint-results" hidden></ul>
+      <div class="reprint-add-row">
+        <label>Quantity <input id="blh-reprint-qty" name="quantity" type="number" min="1" value="1" /></label>
+        <button type="button" class="btn btn-reprint" id="blh-reprint-add" disabled>Add to Label List</button>
+      </div>
+      <h3 class="reprint-list-heading">Label list</h3>
+      <ul id="blh-reprint-list" class="reprint-list receiving-lines"></ul>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary btn-block" id="blh-reprint-print">Print label list</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="blh-reprint-clear">Clear list</button>
+      </div>
     </section>
 
     <section
@@ -199,11 +210,19 @@ export const renderLabels: ViewRender = (root) => {
   let receivingLocationId = ''
   let receivingVoucherId: number | null = null
   let receivingVouchers: BridalLiveReceivingVoucherSummary[] = []
+  let reprintQueue: ReprintQueueItem[] = []
+  let reprintResults: Awaited<ReturnType<typeof searchInventoryForReprint>> = []
+  let selectedReprintId = ''
 
   const statusEl = section.querySelector('#blh-labels-status') as HTMLElement
   const startRowEl = section.querySelector('#blh-start-row') as HTMLElement
   const startColEl = section.querySelector('#blh-start-col') as HTMLElement
   const reprintForm = section.querySelector('#blh-labels-reprint-form') as HTMLFormElement
+  const reprintQtyInput = section.querySelector('#blh-reprint-qty') as HTMLInputElement
+  const reprintResultsEl = section.querySelector('#blh-reprint-results') as HTMLElement
+  const reprintHintEl = section.querySelector('#blh-reprint-search-hint') as HTMLElement
+  const reprintListEl = section.querySelector('#blh-reprint-list') as HTMLElement
+  const reprintAddBtn = section.querySelector('#blh-reprint-add') as HTMLButtonElement
   const styleSelect = section.querySelector('#blh-label-style-layout') as HTMLSelectElement
   const stylePreview = section.querySelector('#blh-label-style-preview') as HTMLElement
   const voucherSelect = section.querySelector('#blh-receiving-voucher') as HTMLSelectElement
@@ -221,7 +240,8 @@ export const renderLabels: ViewRender = (root) => {
       receivingSelected: { ...selectionByItem },
       labelStyleLayoutId,
       reprintItemNumber: String(fd.get('itemNumber') ?? ''),
-      reprintQuantity: Number(fd.get('quantity')) || 1,
+      reprintQuantity: Number(reprintQtyInput.value) || 1,
+      reprintQueue,
       receivingLocationId,
       receivingVoucherId,
       activeSubTab,
@@ -232,6 +252,68 @@ export const renderLabels: ViewRender = (root) => {
           ? 'error'
           : '',
       scrollTop: scrollRoot?.scrollTop ?? 0,
+    })
+  }
+
+  const paintReprintResults = () => {
+    reprintAddBtn.disabled = !selectedReprintId
+    if (reprintResults.length === 0) {
+      reprintResultsEl.hidden = true
+      reprintResultsEl.innerHTML = ''
+      return
+    }
+    reprintResultsEl.hidden = false
+    reprintResultsEl.innerHTML = reprintResults
+      .map((item) => {
+        const selected = item.id === selectedReprintId ? ' is-selected' : ''
+        const meta = [item.size, item.color].filter((v) => v && v !== '—').join(' / ')
+        return `<li>
+          <button type="button" class="reprint-result${selected}" data-id="${escapeHtml(item.id)}">
+            <code>${escapeHtml(item.itemNumber)}</code>
+            ${escapeHtml(item.style)}
+            ${meta ? `<span class="muted"> · ${escapeHtml(meta)}</span>` : ''}
+          </button>
+        </li>`
+      })
+      .join('')
+    reprintResultsEl.querySelectorAll<HTMLButtonElement>('.reprint-result').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        selectedReprintId = btn.dataset.id ?? ''
+        paintReprintResults()
+      })
+    })
+  }
+
+  const paintReprintList = () => {
+    if (reprintQueue.length === 0) {
+      reprintListEl.innerHTML =
+        '<li class="muted receiving-line-empty">No items in the label list yet.</li>'
+      return
+    }
+    const total = reprintQueue.reduce((sum, row) => sum + row.quantity, 0)
+    reprintListEl.innerHTML =
+      reprintQueue
+        .map((row, idx) => {
+          const meta = [row.size, row.color].filter((v) => v && v !== '—').join(' / ')
+          return `<li class="receiving-line reprint-list-row">
+            <span>
+              <code>${escapeHtml(row.itemNumber)}</code>
+              × ${row.quantity}
+              ${row.style ? ` — ${escapeHtml(row.style)}` : ''}
+              ${meta ? ` · ${escapeHtml(meta)}` : ''}
+            </span>
+            <button type="button" class="btn btn-ghost btn-sm" data-remove-idx="${idx}">Remove</button>
+          </li>`
+        })
+        .join('') +
+      `<li class="muted small reprint-list-total">${reprintQueue.length} item(s) · ${total} label(s)</li>`
+    reprintListEl.querySelectorAll<HTMLButtonElement>('[data-remove-idx]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.removeIdx)
+        reprintQueue = reprintQueue.filter((_, i) => i !== idx)
+        paintReprintList()
+        persistUiState()
+      })
     })
   }
 
@@ -346,9 +428,10 @@ export const renderLabels: ViewRender = (root) => {
     paintStylePreview()
 
     const itemInput = reprintForm.elements.namedItem('itemNumber') as HTMLInputElement
-    const qtyInput = reprintForm.elements.namedItem('quantity') as HTMLInputElement
     if (itemInput) itemInput.value = saved.reprintItemNumber
-    if (qtyInput) qtyInput.value = String(saved.reprintQuantity)
+    reprintQtyInput.value = String(saved.reprintQuantity)
+    reprintQueue = [...(saved.reprintQueue ?? [])]
+    paintReprintList()
 
     if (saved.statusText && saved.statusKind === 'error') {
       statusEl.textContent = saved.statusText
@@ -584,16 +667,16 @@ export const renderLabels: ViewRender = (root) => {
   })
 
   reprintForm.addEventListener('input', () => persistUiState())
+  reprintQtyInput.addEventListener('input', () => persistUiState())
   const onScroll = () => persistUiState()
   scrollRoot?.addEventListener('scroll', onScroll, { passive: true })
   reprintForm.addEventListener('submit', async (e) => {
     e.preventDefault()
     const fd = new FormData(reprintForm)
-    const itemNumber = String(fd.get('itemNumber') ?? '').trim()
-    const quantity = Number(fd.get('quantity')) || 1
+    const query = String(fd.get('itemNumber') ?? '').trim()
 
-    if (!itemNumber) {
-      setStatus('Enter an item # to reprint.', 'error')
+    if (!query) {
+      setStatus('Enter an item # or name to search.', 'error')
       return
     }
 
@@ -605,25 +688,85 @@ export const renderLabels: ViewRender = (root) => {
       return
     }
 
-    setStatus(`Looking up item #${itemNumber}…`, '')
+    reprintHintEl.textContent = 'Searching…'
+    selectedReprintId = ''
+    reprintResults = []
+    paintReprintResults()
+    setStatus(`Searching for “${query}”…`, '')
     try {
       const storeId = receivingLocationId || (await getWorkingLocationId())
-      const match = await lookupInventoryByItemNumber(itemNumber, storeId)
-      if (!match) {
-        setStatus(
-          `No item #${itemNumber} found at this location.`,
-          'error',
-        )
+      reprintResults = await searchInventoryForReprint(query, storeId)
+      if (reprintResults.length === 0) {
+        reprintHintEl.textContent = 'No matching items at this location.'
+        setStatus(`No matching items for “${query}”.`, 'error')
         return
       }
-
-      await runPrint(
-        [inventoryItemToLabelLine(match, quantity)],
-        'Enter an item # to reprint.',
-      )
+      if (reprintResults.length === 1) selectedReprintId = reprintResults[0]!.id
+      reprintHintEl.textContent = `${reprintResults.length} match(es). Select one, then add it to the list.`
+      paintReprintResults()
+      setStatus('', '')
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Could not look up that item', 'error')
+      reprintHintEl.textContent = 'Search failed.'
+      setStatus(err instanceof Error ? err.message : 'Could not search inventory', 'error')
     }
+  })
+
+  reprintAddBtn.addEventListener('click', () => {
+    const match = reprintResults.find((item) => item.id === selectedReprintId)
+    if (!match) {
+      setStatus('Select an item from the search results first.', 'error')
+      return
+    }
+    const quantity = Math.max(1, Math.floor(Number(reprintQtyInput.value) || 1))
+    const existing = reprintQueue.find((row) => row.itemNumber === match.itemNumber)
+    if (existing) {
+      existing.quantity += quantity
+    } else {
+      reprintQueue = [
+        ...reprintQueue,
+        {
+          itemNumber: match.itemNumber,
+          quantity,
+          style: match.style,
+          size: match.size,
+          color: match.color,
+          department: match.department,
+          vendorItemName: match.vendorItemName,
+        },
+      ]
+    }
+    paintReprintList()
+    persistUiState()
+    setStatus(`Added ${match.itemNumber} × ${quantity} to the label list.`, 'success')
+  })
+
+  section.querySelector('#blh-reprint-print')?.addEventListener('click', async () => {
+    if (!peekHelperSession()) {
+      setStatus(
+        'Sign in on Home and pick your working location before reprinting labels.',
+        'error',
+      )
+      return
+    }
+    await runPrint(
+      reprintQueue.map((row) => ({
+        itemNumber: row.itemNumber,
+        quantity: row.quantity,
+        style: row.style,
+        size: row.size,
+        color: row.color,
+        department: row.department as LabelLineItem['department'],
+        vendorItemName: row.vendorItemName,
+      })),
+      'Add at least one item to the label list.',
+    )
+  })
+
+  section.querySelector('#blh-reprint-clear')?.addEventListener('click', () => {
+    reprintQueue = []
+    paintReprintList()
+    persistUiState()
+    setStatus('', '')
   })
 
   section.querySelector('#blh-receiving-select-all')?.addEventListener('click', () => {

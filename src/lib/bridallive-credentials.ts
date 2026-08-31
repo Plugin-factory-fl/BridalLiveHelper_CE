@@ -17,7 +17,7 @@ export type BridalLiveApiSettings = {
 }
 
 export const DEFAULT_BRIDALLIVE_LOCATIONS: BridalLiveLocationCredentials[] = [
-  { id: 'white-plains', name: 'White Plains', retailerId: '', apiKey: '' },
+  { id: 'white-plains', name: 'PLM', retailerId: '', apiKey: '' },
   { id: 'poughkeepsie', name: 'Poughkeepsie', retailerId: '', apiKey: '' },
 ]
 
@@ -33,7 +33,7 @@ function normalizeLocation(
 ): BridalLiveLocationCredentials {
   return {
     id: String(raw?.id ?? fallback.id),
-    name: String(raw?.name ?? fallback.name).trim() || fallback.name,
+    name: fallback.name,
     retailerId: String(raw?.retailerId ?? '').trim(),
     apiKey: String(raw?.apiKey ?? '').trim(),
   }

@@ -4,6 +4,16 @@ import { AUTO_STYLE_LAYOUT_ID } from '../labels/style-layouts'
 export const LABELS_SUB_TABS = ['receiving', 'reprint', 'mass'] as const
 export type LabelsSubTab = (typeof LABELS_SUB_TABS)[number]
 
+export type ReprintQueueItem = {
+  itemNumber: string
+  quantity: number
+  style: string
+  size: string
+  color: string
+  department: string
+  vendorItemName: string
+}
+
 export type LabelsUiState = {
   startRow: number
   startCol: number
@@ -12,6 +22,7 @@ export type LabelsUiState = {
   labelStyleLayoutId: string
   reprintItemNumber: string
   reprintQuantity: number
+  reprintQueue: ReprintQueueItem[]
   receivingLocationId: string
   receivingVoucherId: number | null
   statusText: string
@@ -28,6 +39,7 @@ const DEFAULTS: LabelsUiState = {
   labelStyleLayoutId: AUTO_STYLE_LAYOUT_ID,
   reprintItemNumber: '',
   reprintQuantity: 1,
+  reprintQueue: [],
   receivingLocationId: '',
   receivingVoucherId: null,
   statusText: '',
@@ -50,6 +62,7 @@ export async function loadLabelsUiState(): Promise<LabelsUiState> {
     ...raw,
     receivingSelected: raw.receivingSelected ?? {},
     reprintItemNumber: raw.reprintItemNumber || raw.reprintVendorItemName || '',
+    reprintQueue: Array.isArray(raw.reprintQueue) ? raw.reprintQueue : [],
     labelStyleLayoutId: AUTO_STYLE_LAYOUT_ID,
     activeSubTab,
   }

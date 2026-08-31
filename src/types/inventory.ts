@@ -30,6 +30,8 @@ export type InventoryItem = {
   /** BridalLive Description — used as the printed name when Item Name is just the item #. */
   description?: string
   vendor: string
+  /** BridalLive vendor code / vendor ID. */
+  vendorCode?: string
   /** Exact sale-search string (vendor code + item number) for BL typeahead. */
   saleSearchQuery: string
   department: string

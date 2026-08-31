@@ -7,7 +7,7 @@ BridalLive itself is unchanged. Chrome shrinks the page and shows the Helper nex
 ## Open the Helper
 
 1. Open **https://app.bridallive.com** and sign in.
-2. Click the purple **BL** button on the page, or the **BridalLive Helper** icon in the Chrome toolbar.
+2. Click the **BridalLive Helper** icon in the Chrome toolbar.
 
 You need **Chrome 141 or newer**.
 
@@ -15,9 +15,9 @@ First-time install: see [Set up the Helper](docs/SETUP.md).
 
 ## What you can do
 
-- **Home** — Sign in with your shop account and pick White Plains or Poughkeepsie.
+- **Home** — Sign in with your shop account and pick PLM or Poughkeepsie.
 - **Inventory** — Search that boutique. Add another size or color from an existing item. On a sale, add a found item to the open order.
-- **Labels** — Print Avery 5160 labels from a receiving voucher, a spreadsheet (Mass Labeling), or reprint one item.
+- **Labels** — Print Avery 5160 labels from a receiving voucher, a spreadsheet (Mass Labeling), or a reprint list.
 - **Settings** — Text size and which inventory columns you see. Not a place to paste BridalLive keys.
 
 You must sign in on Home before Inventory or Labels. BridalLive keys stay on the Helper server.
@@ -25,7 +25,7 @@ You must sign in on Home before Inventory or Labels. BridalLive keys stay on the
 ## Guides
 
 - [Set up the Helper](docs/SETUP.md) — install in Chrome and sign in
-- [Chrome Web Store listing](docs/CHROME_WEB_STORE.md) — version 0.0.1 zip and store copy
+- [Chrome Web Store listing](docs/CHROME_WEB_STORE.md) — version 0.0.2 zip and store copy
 - [Privacy policy](docs/PRIVACY.md)
 - [Using Inventory](docs/INVENTORY_PILLAR.md)
 - [Printing labels](docs/BRIDALLIVE_CONTEXT.md)

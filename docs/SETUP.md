@@ -1,12 +1,12 @@
 # Set up BridalLive Helper
 
-Staff do this once per computer. After that, open BridalLive and click **BL**.
+Staff do this once per computer. After that, open BridalLive and click the **BridalLive Helper** icon in the Chrome toolbar.
 
 BridalLive Retailer IDs and API keys are **not** pasted into the Helper. They live on the Helper server. Settings is only text size and inventory columns.
 
 ## Install in Chrome
 
-The shop’s long-term install is a **private or unlisted Chrome Web Store listing** (version **0.0.1**). See [Chrome Web Store listing](./CHROME_WEB_STORE.md). Until that listing is live, load the built `dist/` folder as an unpacked extension:
+The shop’s long-term install is a **private or unlisted Chrome Web Store listing** (version **0.0.2**). See [Chrome Web Store listing](./CHROME_WEB_STORE.md). Until that listing is live, load the built `dist/` folder as an unpacked extension:
 
 1. Get the built Helper folder (`dist/`). If you are building from this project:
 
@@ -18,7 +18,7 @@ The shop’s long-term install is a **private or unlisted Chrome Web Store listi
 2. In Chrome, open `chrome://extensions`.
 3. Turn on **Developer mode**.
 4. Click **Load unpacked** and choose the `dist` folder.
-5. Open **https://app.bridallive.com**, then click **BL** (or the Helper toolbar icon).
+5. Open **https://app.bridallive.com**, then click the Helper toolbar icon.
 
 Use **Chrome 141 or newer**. After a Helper update, click **Reload** on the extension card in `chrome://extensions`.
 
@@ -26,7 +26,7 @@ Use **Chrome 141 or newer**. After a Helper update, click **Reload** on the exte
 
 1. Open the Helper on **Home**.
 2. Sign in with your shop email and password (or create an account if the shop allows it).
-3. Pick **White Plains** or **Poughkeepsie**. You can switch later on Home.
+3. Pick **PLM** or **Poughkeepsie**. You can switch later on Home.
 
 Inventory, new sizes/colors, receiving vouchers, and label reprints use live BridalLive data for that boutique. You must be signed in — the Helper does not fall back to a sample catalog as the real path.
 
@@ -45,7 +45,7 @@ Production API: **https://bridallivehelper-ce.onrender.com**.
 Copy `.env.example` to `.env` (local) or set the same variables on Render:
 
 - `HELPER_USERS` — seed accounts (imported once, then hashed in `data/helper-users.json`)
-- `BL_WP_RETAILER_ID` / `BL_WP_API_KEY` — White Plains
+- `BL_WP_RETAILER_ID` / `BL_WP_API_KEY` — PLM
 - `BL_PK_RETAILER_ID` / `BL_PK_API_KEY` — Poughkeepsie
 - Optional `HELPER_SIGNUP_CODE` if Create account should require a shop PIN
 

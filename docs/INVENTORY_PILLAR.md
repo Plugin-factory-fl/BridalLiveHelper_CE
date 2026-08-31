@@ -29,4 +29,4 @@ On a sale screen, each result also has **⊕**. That adds the item to the order 
 
 - Search across **All locations** when you are not sure which boutique has the piece.
 - If nothing loads, sign in on **Home** and confirm the working location. BridalLive keys are on the Helper server, not in Settings.
-- Copy name, vendor item name, or item # with the copy control in that cell.
+- Copy name, vendor item name, vendor, vendor code, item #, or color with the copy control in that cell.

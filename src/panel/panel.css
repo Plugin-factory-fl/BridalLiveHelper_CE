@@ -1574,6 +1574,74 @@ body {
   box-shadow: var(--blh-shadow-sm);
 }
 
+.reprint-add-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.reprint-add-row label {
+  flex: 0 0 auto;
+}
+
+.reprint-add-row .btn-reprint {
+  flex: 1;
+}
+
+.reprint-list-heading {
+  font-size: var(--blh-font-size);
+  font-weight: 600;
+  margin: 14px 0 4px;
+}
+
+.reprint-results {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--blh-border);
+  border-radius: var(--blh-radius);
+}
+
+.reprint-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--blh-surface);
+  border: 0;
+  border-bottom: 1px solid var(--blh-border);
+  padding: 8px 10px;
+  font-size: var(--blh-font-size);
+  cursor: pointer;
+}
+
+.reprint-result:hover {
+  background: #faf6fc;
+}
+
+.reprint-result.is-selected {
+  background: #f0e8f3;
+  font-weight: 600;
+}
+
+.reprint-list {
+  max-height: 220px;
+}
+
+.reprint-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.reprint-list-total {
+  padding: 8px 10px;
+}
+
 .form-grid--compact {
   margin-top: 8px;
 }

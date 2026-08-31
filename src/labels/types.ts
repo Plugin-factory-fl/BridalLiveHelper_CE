@@ -21,7 +21,7 @@ export type LabelPayload = {
   variantColors: string[]
   /** Sibling sizes for this style (shoes tag). */
   availableSizes: string[]
-  /** Store code printed on tags (e.g. WP, PK). */
+  /** Store code printed on tags (e.g. PLM, PK). */
   locationCode: string
   /** Value encoded in the barcode (item number). */
   barcodeValue: string

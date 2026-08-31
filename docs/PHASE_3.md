@@ -16,7 +16,7 @@ Phase 3 is the **finish line**: BridalLive Helper as a fully working product the
 An employee of The Chic Boutique signs in and works. They never see or paste BridalLive Retailer IDs or API keys.
 
 1. **Login lives on Home.** The Home tab is where staff sign in and sign out.
-2. **Working location.** After login, the employee picks **which location they are working at** (White Plains or Poughkeepsie) and can switch when they move between shops.
+2. **Working location.** After login, the employee picks **which location they are working at** (PLM or Poughkeepsie) and can switch when they move between shops.
 3. **Settings** is text size and inventory columns — not a key vault. Choose the location on Home; inventory and labels follow that shop.
 4. **The backend holds the BridalLive APIs and IDs** for each location. The extension calls the Helper server; the server talks to BridalLive.
 
@@ -46,4 +46,4 @@ Staff send email, password, and a location id. BridalLive keys never leave the s
 
 ## Remaining work that needs a person (not code)
 
-- **Private or unlisted Chrome Web Store listing** — upload `bridallive-helper-0.0.1.zip` and paste the copy in [Chrome Web Store listing](./CHROME_WEB_STORE.md). That is how the shop installs and updates the Helper. Unpacked `dist/` is for development.
+- **Private or unlisted Chrome Web Store listing** — upload `bridallive-helper-0.0.2.zip` and paste the copy in [Chrome Web Store listing](./CHROME_WEB_STORE.md). That is how the shop installs and updates the Helper. Unpacked `dist/` is for development.

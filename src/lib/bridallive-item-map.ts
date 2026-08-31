@@ -72,7 +72,9 @@ export function mapBridalLiveItem(
   location: BridalLiveLocationCredentials,
 ): InventoryItem {
   const itemNumber = formatItemNumber(item)
-  const vendor = (item.vendorName ?? item.vendorCode ?? '').trim() || 'Unknown vendor'
+  const vendor = (item.vendorName ?? '').trim() || 'Unknown vendor'
+  const vendorCode =
+    (item.vendorCode ?? '').trim() || (item.vendorId != null ? String(item.vendorId) : '')
   const style = (item.name ?? '').trim() || itemNumber || 'Untitled'
   return {
     id: item.id != null ? String(item.id) : `bl-${itemNumber || crypto.randomUUID()}`,
@@ -81,6 +83,7 @@ export function mapBridalLiveItem(
     vendorItemName: (item.vendorItemName ?? '').trim() || style,
     description: (item.description ?? '').trim() || undefined,
     vendor,
+    vendorCode,
     saleSearchQuery: buildSaleSearchQuery(vendor, itemNumber),
     department: mapDepartmentName(item),
     size: (item.size ?? item.sizeString ?? '').trim(),

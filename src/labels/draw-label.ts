@@ -7,7 +7,6 @@ import { drawCode128Barcode } from './barcode'
 const IN_TO_PT = 72
 const BLACK = rgb(0.08, 0.08, 0.1)
 const MUTED = rgb(0.35, 0.32, 0.38)
-const GRID = rgb(0.45, 0.43, 0.48)
 
 export type LabelDrawFonts = {
   regular: Awaited<ReturnType<import('pdf-lib').PDFDocument['embedFont']>>
@@ -28,25 +27,6 @@ function boxToPt(box: LabelDrawBox) {
     w: box.widthIn * IN_TO_PT,
     h: box.heightIn * IN_TO_PT,
   }
-}
-
-function strokeRect(
-  page: PDFPage,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  borderWidth = 0.4,
-  color = GRID,
-): void {
-  page.drawRectangle({
-    x,
-    y,
-    width: w,
-    height: h,
-    borderColor: color,
-    borderWidth,
-  })
 }
 
 function fitText(font: PDFFont, value: string, size: number, maxWidth: number): string {
@@ -144,21 +124,25 @@ function drawStruck(
   x: number,
   baseline: number,
   maxWidth: number,
+  align: Align = 'left',
 ): void {
   const fitted = fitText(font, text, size, maxWidth)
   if (!fitted) return
-  page.drawText(fitted, { x, y: baseline, size, font, color: MUTED })
   const tw = font.widthOfTextAtSize(fitted, size)
+  let tx = x
+  if (align === 'center') tx = x + (maxWidth - tw) / 2
+  if (align === 'right') tx = x + maxWidth - tw
+  page.drawText(fitted, { x: tx, y: baseline, size, font, color: MUTED })
   page.drawLine({
-    start: { x: x - 0.4, y: baseline + size * 0.35 },
-    end: { x: x + tw + 0.4, y: baseline + size * 0.35 },
+    start: { x: tx - 0.4, y: baseline + size * 0.35 },
+    end: { x: tx + tw + 0.4, y: baseline + size * 0.35 },
     thickness: 0.7,
     color: MUTED,
   })
 }
 
 function itemHash(payload: LabelPayload): string {
-  return `# ${payload.itemNumber}`
+  return payload.itemNumber.trim()
 }
 
 function displayName(payload: LabelPayload): string {
@@ -175,24 +159,17 @@ function displayName(payload: LabelPayload): string {
 
 function msrpLabel(payload: LabelPayload): string {
   const value = payload.msrp || payload.price
-  if (!value || value === '$—') return 'MSRP'
-  return value.toUpperCase().startsWith('MSRP') ? value : `MSRP ${value}`
+  if (!value || value === '$—') return 'MSRP:'
+  const trimmed = value.trim()
+  if (trimmed.toUpperCase().startsWith('MSRP')) return trimmed
+  return `MSRP: ${trimmed}`
 }
 
 function saleLabel(payload: LabelPayload): string {
   return payload.salePrice || payload.price || '$—'
 }
 
-function sizesInInventory(payload: LabelPayload): string {
-  const sizes =
-    payload.availableSizes.length > 0
-      ? payload.availableSizes.join(' ')
-      : payload.size && payload.size !== '—'
-        ? payload.size
-        : ''
-  if (!sizes) return 'Sizes'
-  return `Sizes ${sizes}`
-}
+const PRICE_BOX_H = 22
 
 function drawPriceBox(
   page: PDFPage,
@@ -211,8 +188,8 @@ function drawPriceBox(
     borderColor: BLACK,
     borderWidth: 1.1,
   })
-  const size = Math.min(16, Math.max(11, h * 0.78))
-  const baseline = y + (h - size) / 2 + 1
+  const size = Math.min(16, Math.max(11, h * 0.7))
+  const baseline = y + (h - size) / 2 + size * 0.12
   drawFitted(page, price, fonts.bold, size, x + 2, baseline, w - 4, 'center')
 }
 
@@ -225,10 +202,10 @@ function drawBarcodeColumn(
   w: number,
   h: number,
 ): void {
-  const pad = 2
-  const itemSize = 6
-  const itemH = itemSize + 4
-  const barcodeH = Math.max(12, h - itemH - pad * 2)
+  const pad = 1.5
+  const itemSize = 7.5
+  const itemH = itemSize + 3
+  const barcodeH = Math.max(14, h - itemH - pad * 2)
   const barcodeY = y + itemH + pad
   drawCode128Barcode(payload.barcodeValue || payload.itemNumber, {
     x: x + pad,
@@ -259,9 +236,9 @@ function drawBarcodeColumn(
 }
 
 /**
- * Ricky’s stock label (Avery 5160):
- * TL variants · ML MSRP (struck) · BL sale price
- * TR size/color · MR barcode · BR item #
+ * Dress stock label (Avery 5160):
+ * Left: variants, struck MSRP + location, sale price
+ * Right: centered size/color, barcode with item number under it
  */
 function drawStockLabel(
   page: PDFPage,
@@ -270,16 +247,72 @@ function drawStockLabel(
   fonts: LabelDrawFonts,
 ): void {
   const { x, y, w, h } = boxToPt(box)
-  const pad = 3.5
-  const midX = x + w * 0.52
-  const rightW = w - (midX - x) - pad
-  strokeRect(page, x, y, w, h, 0.4, rgb(0.7, 0.68, 0.72))
+  const pad = 2
+  const midX = x + w * 0.5
+  const leftW = midX - x - pad
+  const rightX = midX + 1
+  const rightW = x + w - pad - rightX
+
+  const sizeColorH = 30
+  const sizeColorY = y + h - pad - sizeColorH
+  page.drawRectangle({
+    x: rightX,
+    y: sizeColorY,
+    width: rightW,
+    height: sizeColorH,
+    borderColor: BLACK,
+    borderWidth: 0.7,
+  })
+  const sizeSize = 11
+  const colorSize = 9
+  drawFitted(
+    page,
+    payload.size || '—',
+    fonts.bold,
+    sizeSize,
+    rightX + 2,
+    sizeColorY + sizeColorH - sizeSize - 2.2,
+    rightW - 4,
+    'center',
+  )
+  drawFitted(
+    page,
+    payload.color || '—',
+    fonts.regular,
+    colorSize,
+    rightX + 2,
+    sizeColorY + 3.2,
+    rightW - 4,
+    'center',
+  )
+
+  const barcodeH = Math.max(18, sizeColorY - 2 - (y + pad))
+  drawBarcodeColumn(page, payload, fonts, rightX, y + pad, rightW, barcodeH)
+
+  const priceBoxH = PRICE_BOX_H
+  const priceBoxY = y + pad
+  const priceBoxW = leftW - pad
+  drawPriceBox(page, fonts, saleLabel(payload), x + pad, priceBoxY, priceBoxW, priceBoxH)
+
+  const msrpSize = 10
+  const locSize = 9
+  const loc = payload.locationCode
+  const locW = loc ? fonts.bold.widthOfTextAtSize(loc, locSize) + 3 : 0
+  const msrpY = priceBoxY + priceBoxH + 4
+  drawStruck(page, msrpLabel(payload), fonts.regular, msrpSize, x + pad, msrpY, leftW - locW)
+  if (loc) {
+    drawFitted(page, loc, fonts.bold, locSize, x + pad, msrpY, leftW, 'right')
+  }
 
   const variantText =
     payload.variantColors.length > 0 ? payload.variantColors.join(' ') : payload.color
-  const variantSize = 5.5
-  const variantLines = wrapWords(variantText, fonts.regular, variantSize, midX - x - pad * 2, 3)
-  let variantY = y + h - pad - variantSize
+  const variantSize = 8
+  const variantCeiling = y + h - pad
+  const variantFloor = msrpY + msrpSize + 3
+  const variantLineH = variantSize + 1.6
+  const maxVariantLines = Math.max(1, Math.min(4, Math.floor((variantCeiling - variantFloor) / variantLineH)))
+  const variantLines = wrapWords(variantText, fonts.regular, variantSize, leftW, maxVariantLines)
+  let variantY = variantCeiling - variantSize
   for (const line of variantLines) {
     page.drawText(line, {
       x: x + pad,
@@ -288,97 +321,8 @@ function drawStockLabel(
       font: fonts.regular,
       color: BLACK,
     })
-    variantY -= variantSize + 1.5
+    variantY -= variantLineH
   }
-
-  const msrp = payload.msrp || payload.price
-  const msrpSize = 7
-  const msrpY = y + h * 0.42
-  page.drawText(msrp, {
-    x: x + pad,
-    y: msrpY,
-    size: msrpSize,
-    font: fonts.regular,
-    color: MUTED,
-  })
-  const msrpW = fonts.regular.widthOfTextAtSize(msrp, msrpSize)
-  page.drawLine({
-    start: { x: x + pad - 0.5, y: msrpY + msrpSize * 0.35 },
-    end: { x: x + pad + msrpW + 0.5, y: msrpY + msrpSize * 0.35 },
-    thickness: 0.7,
-    color: MUTED,
-  })
-
-  const sale = saleLabel(payload)
-  const saleSize = 10
-  page.drawText(sale, {
-    x: x + pad,
-    y: y + pad + 2,
-    size: saleSize,
-    font: fonts.bold,
-    color: BLACK,
-  })
-
-  const boxPad = 2
-  const sizeColorBoxW = Math.min(rightW, 58)
-  const sizeColorBoxH = 22
-  const sizeColorBoxX = x + w - pad - sizeColorBoxW
-  const sizeColorBoxY = y + h - pad - sizeColorBoxH
-  page.drawRectangle({
-    x: sizeColorBoxX,
-    y: sizeColorBoxY,
-    width: sizeColorBoxW,
-    height: sizeColorBoxH,
-    borderColor: BLACK,
-    borderWidth: 0.6,
-  })
-  page.drawText(payload.size || '—', {
-    x: sizeColorBoxX + boxPad,
-    y: sizeColorBoxY + sizeColorBoxH - 9,
-    size: 7,
-    font: fonts.bold,
-    color: BLACK,
-    maxWidth: sizeColorBoxW - boxPad * 2,
-  })
-  page.drawText(payload.color || '—', {
-    x: sizeColorBoxX + boxPad,
-    y: sizeColorBoxY + 3.5,
-    size: 5.5,
-    font: fonts.regular,
-    color: BLACK,
-    maxWidth: sizeColorBoxW - boxPad * 2,
-  })
-
-  const barcodeH = 18
-  const barcodeY = y + h * 0.28
-  const barcodeX = midX
-  const barcodeW = x + w - pad - barcodeX
-  drawCode128Barcode(payload.barcodeValue || payload.itemNumber, {
-    x: barcodeX,
-    y: barcodeY,
-    width: barcodeW,
-    height: barcodeH,
-    fillRect: (rx, ry, rw, rh) => {
-      page.drawRectangle({
-        x: rx,
-        y: ry,
-        width: Math.max(0.35, rw),
-        height: rh,
-        color: BLACK,
-      })
-    },
-  })
-
-  const itemLabel = `Item # ${payload.itemNumber}`
-  const itemSize = 6
-  const itemW = fonts.regular.widthOfTextAtSize(itemLabel, itemSize)
-  page.drawText(itemLabel, {
-    x: Math.max(midX, x + w - pad - itemW),
-    y: y + pad + 2,
-    size: itemSize,
-    font: fonts.regular,
-    color: BLACK,
-  })
 }
 
 function drawJewelryTag(
@@ -390,25 +334,17 @@ function drawJewelryTag(
   const { x, y, w, h } = boxToPt(box)
   const rightW = 56
   const leftW = w - rightW
-  const nameH = 18
-  const colorH = 11
-  const bodyH = h - nameH - colorH
-  const msrpH = Math.max(16, bodyH * 0.4)
-  const priceH = bodyH - msrpH
+  const nameH = 29
+  const bodyH = h - nameH
   const pad = 2.5
 
-  strokeRect(page, x, y, w, h, 0.5, BLACK)
-  strokeRect(page, x, y + h - nameH, w, nameH)
-  strokeRect(page, x, y + h - nameH - colorH, w, colorH)
-  strokeRect(page, x, y + priceH, leftW, msrpH)
-  strokeRect(page, x, y, leftW, priceH)
-  strokeRect(page, x + leftW, y, rightW, bodyH)
-
+  const loc = payload.locationCode
+  const locSize = 7
   drawWrappedInBox(
     page,
     displayName(payload),
     fonts.bold,
-    7.5,
+    12,
     x + pad,
     y + h - nameH,
     w - pad * 2,
@@ -416,27 +352,27 @@ function drawJewelryTag(
     'center',
     2,
   )
-  drawFitted(
-    page,
-    payload.color && payload.color !== '—' ? payload.color : '',
-    fonts.regular,
-    6.5,
-    x + pad,
-    y + h - nameH - colorH + (colorH - 6.5) / 2,
-    w - pad * 2,
-    'center',
-  )
-
-  const msrpSize = 9.5
-  const msrpY = y + priceH + (msrpH - msrpSize) / 2 + 0.5
-  const loc = payload.locationCode
-  const locW = loc ? fonts.bold.widthOfTextAtSize(loc, 7) + 4 : 0
-  drawStruck(page, msrpLabel(payload), fonts.regular, msrpSize, x + pad, msrpY, leftW - pad * 2 - locW)
   if (loc) {
-    drawFitted(page, loc, fonts.bold, 7, x + pad, msrpY, leftW - pad * 2, 'right')
+    drawFitted(page, loc, fonts.bold, locSize, x + pad, y + h - pad - locSize, w - pad * 2, 'right')
   }
 
-  drawPriceBox(page, fonts, saleLabel(payload), x + 3, y + 3, leftW - 6, priceH - 6)
+  const priceBoxH = PRICE_BOX_H
+  const priceBoxY = y + 3
+  const priceBoxW = leftW - 6
+  drawPriceBox(page, fonts, saleLabel(payload), x + 3, priceBoxY, priceBoxW, priceBoxH)
+
+  const msrpSize = 10
+  const msrpY = priceBoxY + priceBoxH + 5
+  drawStruck(
+    page,
+    msrpLabel(payload),
+    fonts.regular,
+    msrpSize,
+    x + 3,
+    msrpY,
+    priceBoxW,
+    'center',
+  )
   drawBarcodeColumn(page, payload, fonts, x + leftW, y, rightW, bodyH)
 }
 
@@ -449,86 +385,53 @@ function drawShoesTag(
   const { x, y, w, h } = boxToPt(box)
   const rightW = 56
   const leftW = w - rightW
-  const sizeW = 48
-  const nameW = w - sizeW
-  const topH = 18
-  const vendorH = 11
-  const bodyH = h - topH - vendorH
-  const sizesH = bodyH * 0.22
-  const msrpH = bodyH * 0.32
-  const priceH = bodyH - sizesH - msrpH
-  const pad = 2.2
+  const topH = 26
+  const bodyH = h - topH
+  const pad = 2
 
-  strokeRect(page, x, y, w, h, 0.5, BLACK)
-  strokeRect(page, x, y + h - topH, nameW, topH)
-  strokeRect(page, x + nameW, y + h - topH, sizeW, topH)
-  strokeRect(page, x, y + h - topH - vendorH, w, vendorH)
-  strokeRect(page, x, y + priceH + msrpH, leftW, sizesH)
-  strokeRect(page, x, y + priceH, leftW, msrpH)
-  strokeRect(page, x, y, leftW, priceH)
-  strokeRect(page, x + leftW, y, rightW, bodyH)
-
+  const colorText = payload.color && payload.color !== '—' ? payload.color : ''
   drawWrappedInBox(
     page,
-    displayName(payload),
+    colorText,
     fonts.bold,
-    7,
+    13,
     x + pad,
     y + h - topH,
-    nameW - pad * 2,
+    w - pad * 2,
     topH,
-    'left',
+    'center',
     2,
   )
-  drawFitted(
-    page,
-    payload.size && payload.size !== '—' ? payload.size : '',
-    fonts.regular,
-    6.5,
-    x + nameW + pad,
-    y + h - topH + (topH - 6.5) / 2,
-    sizeW - pad * 2,
-    'center',
-  )
-  drawFitted(
-    page,
-    payload.vendor && payload.vendor !== 'Unknown vendor' ? payload.vendor : '',
-    fonts.regular,
-    6.5,
-    x + pad,
-    y + h - topH - vendorH + (vendorH - 6.5) / 2,
-    w - pad * 2,
-    'left',
-  )
-
-  const sizesY = y + priceH + msrpH + (sizesH - 6) / 2
   const loc = payload.locationCode
-  const locW = loc ? fonts.bold.widthOfTextAtSize(loc, 6.5) + 3 : 0
-  drawFitted(
-    page,
-    sizesInInventory(payload),
-    fonts.regular,
-    5.5,
-    x + pad,
-    sizesY,
-    leftW - pad * 2 - locW,
-    'left',
-  )
   if (loc) {
-    drawFitted(page, loc, fonts.bold, 6.5, x + pad, sizesY, leftW - pad * 2, 'right')
+    drawFitted(
+      page,
+      loc,
+      fonts.bold,
+      8,
+      x + pad,
+      y + h - pad - 8,
+      w - pad * 2,
+      'right',
+    )
   }
 
-  const msrpSize = 9.5
+  const priceBoxH = PRICE_BOX_H
+  const priceBoxY = y + 2.5
+  const priceBoxW = leftW - 5
+  drawPriceBox(page, fonts, saleLabel(payload), x + 2.5, priceBoxY, priceBoxW, priceBoxH)
+
+  const msrpSize = 11
   drawStruck(
     page,
     msrpLabel(payload),
     fonts.regular,
     msrpSize,
-    x + pad,
-    y + priceH + (msrpH - msrpSize) / 2,
-    leftW - pad * 2,
+    x + 2.5,
+    priceBoxY + priceBoxH + 5,
+    priceBoxW,
+    'center',
   )
-  drawPriceBox(page, fonts, saleLabel(payload), x + 2.5, y + 2.5, leftW - 5, priceH - 5)
   drawBarcodeColumn(page, payload, fonts, x + leftW, y, rightW, bodyH)
 }
 
@@ -545,13 +448,6 @@ function drawShoesStock(
   const bodyH = h - nameH
   const rowH = bodyH / 3
   const pad = 2.5
-
-  strokeRect(page, x, y, w, h, 0.5, BLACK)
-  strokeRect(page, x, y + h - nameH, w, nameH)
-  strokeRect(page, x, y + rowH * 2, leftW, rowH)
-  strokeRect(page, x, y + rowH, leftW, rowH)
-  strokeRect(page, x, y, leftW, rowH)
-  strokeRect(page, x + leftW, y, rightW, bodyH)
 
   drawWrappedInBox(
     page,

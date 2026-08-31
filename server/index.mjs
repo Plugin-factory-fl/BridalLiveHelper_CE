@@ -33,7 +33,7 @@ const userStore = createUserStore({
 const sessionStore = createSessionStore(DATA_DIR)
 
 const LOCATIONS = [
-  { id: 'white-plains', name: 'White Plains' },
+  { id: 'white-plains', name: 'PLM' },
   { id: 'poughkeepsie', name: 'Poughkeepsie' },
 ]
 

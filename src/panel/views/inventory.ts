@@ -3,6 +3,7 @@ import {
   INVENTORY_BROWSE_PAGE_SIZES,
   INVENTORY_COLUMN_IDS,
   INVENTORY_COLUMN_LABELS,
+  DEFAULT_INVENTORY_COLUMNS,
   loadInventoryUiState,
   saveInventoryUiState,
   type InventoryBrowsePageSize,
@@ -79,6 +80,8 @@ type SortDir = 'asc' | 'desc'
 const DEFAULT_COL_WIDTHS: Record<InventoryColumnId, number> = {
   name: 72,
   vendorItemName: 72,
+  vendor: 64,
+  vendorCode: 56,
   itemNumber: 56,
   department: 48,
   size: 36,
@@ -119,6 +122,10 @@ function sortValue(item: InventoryItem, key: SortKey): string | number {
       return item.style.toLowerCase()
     case 'vendorItemName':
       return item.vendorItemName.toLowerCase()
+    case 'vendor':
+      return item.vendor.toLowerCase()
+    case 'vendorCode':
+      return (item.vendorCode ?? '').toLowerCase()
     case 'itemNumber':
       return item.itemNumber.toLowerCase()
     case 'department':
@@ -268,16 +275,7 @@ export const renderInventory: ViewRender = (root) => {
   let sortKey: SortKey = 'itemNumber'
   let sortDir: SortDir = 'asc'
   let uiState: InventoryUiState = {
-    columns: {
-      name: true,
-      vendorItemName: true,
-      itemNumber: true,
-      department: false,
-      size: true,
-      color: true,
-      location: true,
-      qty: true,
-    },
+    columns: { ...DEFAULT_INVENTORY_COLUMNS },
     columnWidths: {},
     browsePageSize: BROWSE_PAGE_SIZE_DEFAULT,
   }
@@ -491,6 +489,12 @@ export const renderInventory: ViewRender = (root) => {
         return `<td class="copyable-cell inv-truncate" title="${esc(item.style)}">${copyableCellHtml(item.style, esc, 'Copy name')}</td>`
       case 'vendorItemName':
         return `<td class="copyable-cell inv-truncate" title="${esc(item.vendorItemName)}">${copyableCellHtml(item.vendorItemName, esc, 'Copy vendor item name')}</td>`
+      case 'vendor':
+        return `<td class="copyable-cell inv-truncate" title="${esc(item.vendor)}">${copyableCellHtml(item.vendor, esc, 'Copy vendor')}</td>`
+      case 'vendorCode': {
+        const code = item.vendorCode ?? ''
+        return `<td class="copyable-cell inv-truncate" title="${esc(code)}">${copyableCellHtml(code, esc, 'Copy vendor code')}</td>`
+      }
       case 'itemNumber':
         return `<td class="copyable-cell inv-truncate" title="${esc(item.itemNumber)}">${copyableCellHtml(item.itemNumber, esc, 'Copy item number')}</td>`
       case 'department':
@@ -498,7 +502,7 @@ export const renderInventory: ViewRender = (root) => {
       case 'size':
         return `<td class="inv-truncate" title="${esc(item.size)}">${esc(item.size)}</td>`
       case 'color':
-        return `<td class="inv-truncate" title="${esc(item.color)}">${esc(item.color)}</td>`
+        return `<td class="copyable-cell inv-truncate" title="${esc(item.color)}">${copyableCellHtml(item.color, esc, 'Copy color')}</td>`
       case 'location':
         return `<td class="inv-loc-cell">${locationCell(item)}</td>`
       case 'qty':

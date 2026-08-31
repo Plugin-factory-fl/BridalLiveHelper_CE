@@ -1,15 +1,15 @@
 # BridalLive Helper privacy policy
 
-Last updated: 25 August 2026. Version 0.0.1.
+Last updated: 31 August 2026. Version 0.0.2.
 
 Public URL for the Chrome Web Store: **https://bridallivehelper-ce.onrender.com/privacy**
 
-BridalLive Helper is a Chrome side panel used beside [BridalLive](https://app.bridallive.com) by boutique staff. It is published for The Chic Boutique (White Plains and Poughkeepsie).
+BridalLive Helper is a Chrome side panel used beside [BridalLive](https://app.bridallive.com) by boutique staff. It is published for The Chic Boutique (PLM and Poughkeepsie).
 
 ## What we collect
 
 - Helper account email, display name, and a hashed password (stored on the Helper server).
-- A sign-in token and the working boutique (White Plains or Poughkeepsie) in Chrome storage on that computer.
+- A sign-in token and the working boutique (PLM or Poughkeepsie) in Chrome storage on that computer.
 - Inventory, receiving, and label requests needed to do the job, sent through the Helper server to BridalLive.
 
 ## What we do not collect
