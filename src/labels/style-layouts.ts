@@ -39,20 +39,11 @@ const JEWELRY_FIELDS = [
 ]
 
 const SHOES_FIELDS = [
-  'Color',
-  'Store code',
-  'MSRP (strikethrough)',
-  'Sale price',
-  'Barcode',
-  'Item #',
-]
-
-const SHOES_STOCK_FIELDS = [
-  'Item name',
+  'Name',
   'Size',
-  'Store code',
   'Color',
-  'Price',
+  'Sale price',
+  'Store code',
   'Barcode',
   'Item #',
 ]
@@ -63,7 +54,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     department: 'Dress',
     name: 'Dress — stock',
     description:
-      'Variants top-left, struck MSRP with store code and sale price; centered size/color, barcode and item # on the right.',
+      'Variants top-left, struck MSRP and sale price; size/color, barcode, item # and store code on the right.',
     fields: DRESS_FIELDS,
     status: 'client',
     previewImage: 'tags/dress.png',
@@ -73,7 +64,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     department: 'Shoes',
     name: 'Shoes',
     description:
-      'Color on top, struck MSRP, boxed sale price, barcode on the right.',
+      'Name, size, and color stacked over the price box; store code at the top of the barcode.',
     fields: SHOES_FIELDS,
     status: 'client',
     previewImage: 'tags/shoes.png',
@@ -82,8 +73,8 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     id: 'shoes-stock',
     department: 'Shoes',
     name: 'Shoes — stock',
-    description: 'Stacked name, size, store code, and color with a boxed price and barcode.',
-    fields: SHOES_STOCK_FIELDS,
+    description: 'Name, size, and color stacked over the price box; store code at the top of the barcode.',
+    fields: SHOES_FIELDS,
     status: 'client',
     previewImage: 'tags/shoes-stock.png',
   },
@@ -91,7 +82,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     id: 'jewelry-tag',
     department: 'Jewelry',
     name: 'Jewelry',
-    description: 'Large item name on top, struck MSRP, boxed sale price, barcode and item # on the right.',
+    description: 'Item name centered over the price box, struck MSRP, boxed sale price, barcode on the right.',
     fields: JEWELRY_FIELDS,
     status: 'client',
     previewImage: 'tags/jewelry.png',

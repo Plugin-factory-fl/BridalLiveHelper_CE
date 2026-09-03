@@ -193,6 +193,48 @@ function drawPriceBox(
   drawFitted(page, price, fonts.bold, size, x + 2, baseline, w - 4, 'center')
 }
 
+function isColorsCaption(text: string): boolean {
+  return /^(colors?)\s*:/i.test(text.trim())
+}
+
+function shoeAvailableColors(payload: LabelPayload): string {
+  if (payload.variantColors.length > 1) {
+    return `Colors: ${payload.variantColors.join(', ')}`
+  }
+  const desc = payload.description.trim()
+  if (isColorsCaption(desc)) return desc
+  const name = payload.itemName.trim()
+  if (isColorsCaption(name)) return name
+  return ''
+}
+
+function shoeName(payload: LabelPayload): string {
+  const desc = payload.description.trim()
+  const color = (payload.color ?? '').trim().toLowerCase()
+  const itemNumber = payload.itemNumber.trim().toLowerCase()
+  if (
+    desc &&
+    !isColorsCaption(desc) &&
+    desc.includes('-') &&
+    desc.toLowerCase() !== color &&
+    desc.toLowerCase() !== itemNumber
+  ) {
+    return desc
+  }
+  const name = payload.itemName.trim()
+  if (
+    name &&
+    !isColorsCaption(name) &&
+    name.toLowerCase() !== itemNumber &&
+    name.toLowerCase() !== color
+  ) {
+    return name
+  }
+  const style = payload.style.trim()
+  if (style && style !== 'Unknown style' && !isColorsCaption(style)) return style
+  return ''
+}
+
 function drawBarcodeColumn(
   page: PDFPage,
   payload: LabelPayload,
@@ -201,16 +243,35 @@ function drawBarcodeColumn(
   y: number,
   w: number,
   h: number,
+  opts?: {
+    locationCode?: string
+    locationAtTop?: boolean
+    locationLeftOfBarcode?: boolean
+    captionAbove?: string
+    hashItemNumber?: boolean
+  },
 ): void {
   const pad = 1.5
   const itemSize = 7.5
-  const itemH = itemSize + 3
-  const barcodeH = Math.max(14, h - itemH - pad * 2)
+  const locSize = 8
+  const captionSize = 9.5
+  const loc = opts?.locationCode?.trim() ?? ''
+  const locAtTop = Boolean(opts?.locationAtTop && loc)
+  const locLeft = Boolean(opts?.locationLeftOfBarcode && loc)
+  const caption = opts?.captionAbove?.trim() ?? ''
+  const itemLabel = opts?.hashItemNumber ? `# ${itemHash(payload)}` : itemHash(payload)
+  const locOnItemLine = Boolean(loc && !locAtTop && !locLeft)
+  const itemH = Math.max(itemSize, locOnItemLine ? locSize : itemSize) + 3
+  const topH = (caption ? captionSize + 4 : 0) + (locAtTop ? locSize + 3 : 0)
+  const barcodeH = Math.max(12, h - itemH - topH - pad * 2)
   const barcodeY = y + itemH + pad
+  const locGutter = locLeft ? Math.max(16, fonts.regular.widthOfTextAtSize(loc, locSize) + 3) : 0
+  const barcodeX = x + pad + locGutter
+  const barcodeW = Math.max(8, w - pad * 2 - locGutter)
   drawCode128Barcode(payload.barcodeValue || payload.itemNumber, {
-    x: x + pad,
+    x: barcodeX,
     y: barcodeY,
-    width: Math.max(8, w - pad * 2),
+    width: barcodeW,
     height: barcodeH,
     quietModules: 0,
     fillRect: (rx, ry, rw, rh) => {
@@ -223,22 +284,67 @@ function drawBarcodeColumn(
       })
     },
   })
-  drawFitted(
-    page,
-    itemHash(payload),
-    fonts.regular,
-    itemSize,
-    x + pad,
-    y + pad + 1,
-    w - pad * 2,
-    'center',
-  )
+  if (locLeft) {
+    drawFitted(
+      page,
+      loc,
+      fonts.regular,
+      locSize,
+      x + pad,
+      barcodeY + barcodeH - locSize,
+      locGutter - 1,
+      'left',
+    )
+  }
+  let topBaseline = y + h - pad - (locAtTop ? locSize : captionSize)
+  if (locAtTop) {
+    drawFitted(page, loc, fonts.regular, locSize, x + pad, topBaseline, w - pad * 2, 'left')
+    topBaseline -= locSize + 3
+  }
+  if (caption) {
+    drawFitted(
+      page,
+      caption,
+      fonts.bold,
+      captionSize,
+      x + pad,
+      locAtTop ? topBaseline : y + h - pad - captionSize,
+      w - pad * 2,
+      'center',
+    )
+  }
+  const itemBaseline = y + pad + 1
+  if (locOnItemLine) {
+    const locW = fonts.bold.widthOfTextAtSize(loc, locSize) + 3
+    drawFitted(
+      page,
+      itemLabel,
+      fonts.regular,
+      itemSize,
+      x + pad,
+      itemBaseline,
+      w - pad * 2 - locW,
+      'center',
+    )
+    drawFitted(page, loc, fonts.bold, locSize, x + pad, itemBaseline, w - pad * 2, 'right')
+  } else {
+    drawFitted(
+      page,
+      itemLabel,
+      fonts.regular,
+      itemSize,
+      locLeft ? barcodeX : x + pad,
+      itemBaseline,
+      locLeft ? barcodeW : w - pad * 2,
+      'center',
+    )
+  }
 }
 
 /**
  * Dress stock label (Avery 5160):
- * Left: variants, struck MSRP + location, sale price
- * Right: centered size/color, barcode with item number under it
+ * Left: variants, struck MSRP, sale price
+ * Right: size/color, barcode, item # with store code
  */
 function drawStockLabel(
   page: PDFPage,
@@ -287,7 +393,9 @@ function drawStockLabel(
   )
 
   const barcodeH = Math.max(18, sizeColorY - 2 - (y + pad))
-  drawBarcodeColumn(page, payload, fonts, rightX, y + pad, rightW, barcodeH)
+  drawBarcodeColumn(page, payload, fonts, rightX, y + pad, rightW, barcodeH, {
+    locationCode: payload.locationCode,
+  })
 
   const priceBoxH = PRICE_BOX_H
   const priceBoxY = y + pad
@@ -295,14 +403,8 @@ function drawStockLabel(
   drawPriceBox(page, fonts, saleLabel(payload), x + pad, priceBoxY, priceBoxW, priceBoxH)
 
   const msrpSize = 10
-  const locSize = 9
-  const loc = payload.locationCode
-  const locW = loc ? fonts.bold.widthOfTextAtSize(loc, locSize) + 3 : 0
   const msrpY = priceBoxY + priceBoxH + 4
-  drawStruck(page, msrpLabel(payload), fonts.regular, msrpSize, x + pad, msrpY, leftW - locW)
-  if (loc) {
-    drawFitted(page, loc, fonts.bold, locSize, x + pad, msrpY, leftW, 'right')
-  }
+  drawStruck(page, msrpLabel(payload), fonts.regular, msrpSize, x + pad, msrpY, leftW)
 
   const variantText =
     payload.variantColors.length > 0 ? payload.variantColors.join(' ') : payload.color
@@ -335,31 +437,40 @@ function drawJewelryTag(
   const rightW = 56
   const leftW = w - rightW
   const nameH = 29
-  const bodyH = h - nameH
   const pad = 2.5
+  const priceBoxX = x + 3
+  const priceBoxW = leftW - 6
 
   const loc = payload.locationCode
-  const locSize = 7
+  const locSize = 9
   drawWrappedInBox(
     page,
     displayName(payload),
     fonts.bold,
     12,
-    x + pad,
+    priceBoxX,
     y + h - nameH,
-    w - pad * 2,
+    priceBoxW,
     nameH,
     'center',
     2,
   )
   if (loc) {
-    drawFitted(page, loc, fonts.bold, locSize, x + pad, y + h - pad - locSize, w - pad * 2, 'right')
+    drawFitted(
+      page,
+      loc,
+      fonts.bold,
+      locSize,
+      priceBoxX,
+      y + h - pad - locSize,
+      priceBoxW,
+      'right',
+    )
   }
 
   const priceBoxH = PRICE_BOX_H
   const priceBoxY = y + 3
-  const priceBoxW = leftW - 6
-  drawPriceBox(page, fonts, saleLabel(payload), x + 3, priceBoxY, priceBoxW, priceBoxH)
+  drawPriceBox(page, fonts, saleLabel(payload), priceBoxX, priceBoxY, priceBoxW, priceBoxH)
 
   const msrpSize = 10
   const msrpY = priceBoxY + priceBoxH + 5
@@ -368,12 +479,12 @@ function drawJewelryTag(
     msrpLabel(payload),
     fonts.regular,
     msrpSize,
-    x + 3,
+    priceBoxX,
     msrpY,
     priceBoxW,
     'center',
   )
-  drawBarcodeColumn(page, payload, fonts, x + leftW, y, rightW, bodyH)
+  drawBarcodeColumn(page, payload, fonts, x + leftW, y, rightW, h)
 }
 
 function drawShoesTag(
@@ -383,56 +494,69 @@ function drawShoesTag(
   fonts: LabelDrawFonts,
 ): void {
   const { x, y, w, h } = boxToPt(box)
-  const rightW = 56
+  const rightW = 58
   const leftW = w - rightW
-  const topH = 26
-  const bodyH = h - topH
-  const pad = 2
+  const pad = 2.5
+  const priceBoxX = x + pad
+  const priceBoxW = leftW - pad * 2
+  const priceBoxH = PRICE_BOX_H
+  const priceBoxY = y + pad
 
+  drawPriceBox(page, fonts, saleLabel(payload), priceBoxX, priceBoxY, priceBoxW, priceBoxH)
+
+  const colorsText = shoeAvailableColors(payload)
+  const nameText = shoeName(payload)
+  const sizeText = payload.size && payload.size !== '—' ? payload.size : ''
   const colorText = payload.color && payload.color !== '—' ? payload.color : ''
-  drawWrappedInBox(
-    page,
-    colorText,
-    fonts.bold,
-    13,
-    x + pad,
-    y + h - topH,
-    w - pad * 2,
-    topH,
-    'center',
-    2,
-  )
-  const loc = payload.locationCode
-  if (loc) {
+
+  const sizeSize = 11
+  const colorSize = 12
+  const gap = 2
+  const priceTop = priceBoxY + priceBoxH
+  const colorBaseline = priceTop + 3
+  const sizeBaseline = colorBaseline + colorSize + gap
+
+  if (colorsText) {
+    const colorsBottom = sizeText ? sizeBaseline + sizeSize + 1 : colorBaseline + colorSize + 1
+    const colorsH = Math.max(10, y + h - pad - colorsBottom)
+    drawWrappedInBox(
+      page,
+      colorsText,
+      fonts.regular,
+      6,
+      priceBoxX,
+      colorsBottom,
+      priceBoxW,
+      colorsH,
+      'center',
+      3,
+    )
+  } else if (nameText) {
+    const nameSize = 12
     drawFitted(
       page,
-      loc,
+      nameText,
       fonts.bold,
-      8,
-      x + pad,
-      y + h - pad - 8,
-      w - pad * 2,
-      'right',
+      nameSize,
+      priceBoxX,
+      (sizeText ? sizeBaseline + sizeSize : colorBaseline + colorSize) + gap,
+      priceBoxW,
+      'center',
     )
   }
 
-  const priceBoxH = PRICE_BOX_H
-  const priceBoxY = y + 2.5
-  const priceBoxW = leftW - 5
-  drawPriceBox(page, fonts, saleLabel(payload), x + 2.5, priceBoxY, priceBoxW, priceBoxH)
+  if (sizeText) {
+    drawFitted(page, sizeText, fonts.bold, sizeSize, priceBoxX, sizeBaseline, priceBoxW, 'center')
+  }
+  if (colorText) {
+    drawFitted(page, colorText, fonts.bold, colorSize, priceBoxX, colorBaseline, priceBoxW, 'center')
+  }
 
-  const msrpSize = 11
-  drawStruck(
-    page,
-    msrpLabel(payload),
-    fonts.regular,
-    msrpSize,
-    x + 2.5,
-    priceBoxY + priceBoxH + 5,
-    priceBoxW,
-    'center',
-  )
-  drawBarcodeColumn(page, payload, fonts, x + leftW, y, rightW, bodyH)
+  drawBarcodeColumn(page, payload, fonts, x + leftW, y, rightW, h, {
+    locationCode: payload.locationCode,
+    locationLeftOfBarcode: true,
+    hashItemNumber: true,
+  })
 }
 
 function drawShoesStock(
@@ -441,56 +565,7 @@ function drawShoesStock(
   box: LabelDrawBox,
   fonts: LabelDrawFonts,
 ): void {
-  const { x, y, w, h } = boxToPt(box)
-  const rightW = 56
-  const leftW = w - rightW
-  const nameH = 18
-  const bodyH = h - nameH
-  const rowH = bodyH / 3
-  const pad = 2.5
-
-  drawWrappedInBox(
-    page,
-    displayName(payload),
-    fonts.bold,
-    7,
-    x + pad,
-    y + h - nameH,
-    w - pad * 2,
-    nameH,
-    'center',
-    2,
-  )
-
-  const sizeY = y + rowH * 2 + (rowH - 7) / 2
-  const loc = payload.locationCode
-  const locW = loc ? fonts.bold.widthOfTextAtSize(loc, 6.5) + 3 : 0
-  drawFitted(
-    page,
-    payload.size && payload.size !== '—' ? payload.size : '',
-    fonts.regular,
-    7,
-    x + pad,
-    sizeY,
-    leftW - pad * 2 - locW,
-    'center',
-  )
-  if (loc) {
-    drawFitted(page, loc, fonts.bold, 6.5, x + pad, sizeY, leftW - pad * 2, 'right')
-  }
-
-  drawFitted(
-    page,
-    payload.color && payload.color !== '—' ? payload.color : '',
-    fonts.regular,
-    6.5,
-    x + pad,
-    y + rowH + (rowH - 6.5) / 2,
-    leftW - pad * 2,
-    'center',
-  )
-  drawPriceBox(page, fonts, saleLabel(payload), x + 3, y + 2.5, leftW - 6, rowH - 5)
-  drawBarcodeColumn(page, payload, fonts, x + leftW, y, rightW, bodyH)
+  drawShoesTag(page, payload, box, fonts)
 }
 
 const DRAWERS: Record<

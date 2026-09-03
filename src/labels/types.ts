@@ -5,8 +5,10 @@ import type { LabelLineItem, LabelTemplate } from '../api/types'
 export type LabelPayload = {
   itemNumber: string
   style: string
-  /** Descriptive name printed on jewelry/shoes tags (not the item #). */
+  /** Descriptive name printed on jewelry tags (not the item #). */
   itemName: string
+  /** BridalLive Description (often a short code like A-1234 on shoes). */
+  description: string
   vendor: string
   department: Department
   size: string
