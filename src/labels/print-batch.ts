@@ -31,6 +31,8 @@ export async function printLabelBatch(
   const catalog = await loadCatalogForLabelPrint(request.items)
   const startRow = request.averyStartRow ?? 1
   const startCol = request.averyStartColumn ?? 1
+  const endRow = request.averyEndRow
+  const endCol = request.averyEndColumn
   const styleLayoutId = request.styleLayoutId ?? AUTO_STYLE_LAYOUT_ID
 
   const labels = expandLabelLines(
@@ -64,12 +66,11 @@ export async function printLabelBatch(
     }
   }
 
-  const pdfBytes = await buildLabelPdf(labels, sheet, startRow, startCol)
-  const pageCount = pageCountForLabels(
-    labels.length,
-    sheet,
-    (startRow - 1) * sheet.columns + (startCol - 1),
-  )
+  const pdfBytes = await buildLabelPdf(labels, sheet, startRow, startCol, endRow, endCol)
+  const startIndex = (startRow - 1) * sheet.columns + (startCol - 1)
+  const endIndex =
+    endRow != null && endCol != null ? (endRow - 1) * sheet.columns + (endCol - 1) : undefined
+  const pageCount = pageCountForLabels(labels.length, sheet, startIndex, endIndex)
 
   const openResult = await openPdfInNewTab(pdfBytes)
 

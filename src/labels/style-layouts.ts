@@ -15,12 +15,12 @@ export type LabelStyleLayout = {
   /** Fields printed on this layout (for preview card). */
   fields: string[]
   status: LabelStyleLayoutStatus
-  /** Mockup image in the extension package (`public/tags/…`). */
+  /** Preview from `drawLabel` (`public/tags/…`). Regenerate with `npm run preview:tags`. */
   previewImage?: string
 }
 
 const DRESS_FIELDS = [
-  'All colors / variants',
+  'Description',
   'MSRP (strikethrough)',
   'Sale price',
   'Store code',
@@ -31,6 +31,7 @@ const DRESS_FIELDS = [
 
 const JEWELRY_FIELDS = [
   'Item name',
+  'Color',
   'MSRP (strikethrough)',
   'Store code',
   'Sale price',
@@ -42,8 +43,10 @@ const SHOES_FIELDS = [
   'Name',
   'Size',
   'Color',
+  'MSRP (strikethrough)',
   'Sale price',
   'Store code',
+  'Description',
   'Barcode',
   'Item #',
 ]
@@ -54,7 +57,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     department: 'Dress',
     name: 'Dress — stock',
     description:
-      'Variants top-left, struck MSRP and sale price; size/color, barcode, item # and store code on the right.',
+      'Description top-left, struck MSRP and sale price; size/color, barcode, item # and store code on the right.',
     fields: DRESS_FIELDS,
     status: 'client',
     previewImage: 'tags/dress.png',
@@ -64,7 +67,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     department: 'Shoes',
     name: 'Shoes',
     description:
-      'Name, size, and color stacked over the price box; store code at the top of the barcode.',
+      'Product name, size, and color over a struck MSRP and price box; location and description above a dress-height barcode.',
     fields: SHOES_FIELDS,
     status: 'client',
     previewImage: 'tags/shoes.png',
@@ -73,7 +76,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     id: 'shoes-stock',
     department: 'Shoes',
     name: 'Shoes — stock',
-    description: 'Name, size, and color stacked over the price box; store code at the top of the barcode.',
+    description: 'Product name, size, and color over a struck MSRP and price box; location and description above a dress-height barcode.',
     fields: SHOES_FIELDS,
     status: 'client',
     previewImage: 'tags/shoes-stock.png',
@@ -82,7 +85,8 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     id: 'jewelry-tag',
     department: 'Jewelry',
     name: 'Jewelry',
-    description: 'Item name centered over the price box, struck MSRP, boxed sale price, barcode on the right.',
+    description:
+      'Name and color centered over the price box; location above a dress-height barcode.',
     fields: JEWELRY_FIELDS,
     status: 'client',
     previewImage: 'tags/jewelry.png',

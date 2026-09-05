@@ -1,5 +1,6 @@
 import type { InventoryItem } from '../types/inventory'
 import type { LabelLineItem } from '../api/types'
+import type { SpreadsheetInventoryRow } from './spreadsheet/types'
 import { getWorkingLocationId } from '../lib/helper-session'
 import { resolveDataSource } from '../lib/data-source'
 import { getMockCatalog } from '../inventory/mock-provider'
@@ -107,4 +108,43 @@ export function inventoryItemToLabelLine(
     retailPrice: item.retailPrice,
     salePrice: item.salePrice,
   }
+}
+
+/** Fill scan-gun rows with BridalLive item details at the working location. */
+export async function matchScanRowsToBridalLive(
+  rows: SpreadsheetInventoryRow[],
+  storeId?: string,
+): Promise<SpreadsheetInventoryRow[]> {
+  const resolvedStoreId = storeId || (await getWorkingLocationId())
+  const cache = new Map<string, InventoryItem | null>()
+  const out: SpreadsheetInventoryRow[] = []
+
+  for (const row of rows) {
+    const key = row.itemNumber.trim()
+    if (!cache.has(key)) {
+      cache.set(key, key ? await lookupInventoryByItemNumber(key, resolvedStoreId) : null)
+    }
+    const match = cache.get(key) ?? null
+    if (!match) {
+      out.push({ ...row, matched: false, selected: false })
+      continue
+    }
+    out.push({
+      ...row,
+      matched: true,
+      itemNumber: match.itemNumber,
+      itemName: match.vendorItemName || match.style || match.itemNumber,
+      description: match.description ?? '',
+      vendorItemName: match.vendorItemName,
+      vendorCode: match.vendorCode ?? row.vendorCode,
+      color: match.color,
+      size: match.size,
+      retailPrice: match.retailPrice ?? null,
+      salePrice: match.salePrice ?? null,
+      department: match.department,
+      selected: true,
+    })
+  }
+
+  return out
 }

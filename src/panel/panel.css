@@ -2031,6 +2031,10 @@ hr {
   font-weight: 600;
 }
 
+.receiving-line.is-unmatched {
+  opacity: 0.65;
+}
+
 .mass-preview-wrap {
   margin: 8px 0 10px;
 }

@@ -47,24 +47,59 @@ function wrapWords(
   maxWidth: number,
   maxLines: number,
 ): string[] {
-  const words = text.split(/\s+/).filter(Boolean)
-  if (!words.length) return []
+  const words = text
+    .replace(/\s*,\s*/g, ', ')
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!words.length || maxLines < 1) return []
+
   const lines: string[] = []
   let current = ''
-  for (const word of words) {
+  let overflow = false
+
+  const pushLine = (line: string) => {
+    if (!line || lines.length >= maxLines) return
+    const fits = font.widthOfTextAtSize(line, size) <= maxWidth
+    lines.push(fits ? line : fitText(font, line, size, maxWidth))
+  }
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i]!
+    if (lines.length >= maxLines) {
+      overflow = true
+      break
+    }
     const next = current ? `${current} ${word}` : word
     if (font.widthOfTextAtSize(next, size) <= maxWidth) {
       current = next
       continue
     }
-    if (current) lines.push(current)
-    current = word
-    if (lines.length >= maxLines) break
+    if (current) {
+      pushLine(current)
+      current = ''
+    }
+    if (lines.length >= maxLines) {
+      overflow = true
+      break
+    }
+    if (font.widthOfTextAtSize(word, size) <= maxWidth) {
+      current = word
+      continue
+    }
+    pushLine(word)
+    current = ''
+    if (i < words.length - 1) overflow = true
   }
-  if (current && lines.length < maxLines) lines.push(current)
-  if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) {
-    const last = lines[maxLines - 1]!
-    lines[maxLines - 1] = `${last.replace(/\s+\S*$/, '')}…`.trim()
+  if (current && lines.length < maxLines) pushLine(current)
+  else if (current) overflow = true
+
+  if (overflow && lines.length) {
+    const last = lines[lines.length - 1]!.replace(/…$/, '')
+    let cut = last
+    while (cut.length > 1 && font.widthOfTextAtSize(`${cut}…`, size) > maxWidth) {
+      cut = cut.slice(0, -1)
+    }
+    lines[lines.length - 1] = `${cut}…`
   }
   return lines
 }
@@ -170,6 +205,10 @@ function saleLabel(payload: LabelPayload): string {
 }
 
 const PRICE_BOX_H = 22
+/** Right-column space above the barcode on dress, shoe, and jewelry tags. */
+const BARCODE_TOP_RESERVE_H = 30
+/** Store code (PLM / PK) — shared size so dress matches shoes and jewelry. */
+const LOCATION_SIZE = 9
 
 function drawPriceBox(
   page: PDFPage,
@@ -197,17 +236,6 @@ function isColorsCaption(text: string): boolean {
   return /^(colors?)\s*:/i.test(text.trim())
 }
 
-function shoeAvailableColors(payload: LabelPayload): string {
-  if (payload.variantColors.length > 1) {
-    return `Colors: ${payload.variantColors.join(', ')}`
-  }
-  const desc = payload.description.trim()
-  if (isColorsCaption(desc)) return desc
-  const name = payload.itemName.trim()
-  if (isColorsCaption(name)) return name
-  return ''
-}
-
 function shoeName(payload: LabelPayload): string {
   const desc = payload.description.trim()
   const color = (payload.color ?? '').trim().toLowerCase()
@@ -232,7 +260,46 @@ function shoeName(payload: LabelPayload): string {
   }
   const style = payload.style.trim()
   if (style && style !== 'Unknown style' && !isColorsCaption(style)) return style
-  return ''
+  return name || style || payload.itemNumber
+}
+
+function shoeDescription(payload: LabelPayload, productName: string): string {
+  const desc = payload.description.trim()
+  if (!desc) return ''
+  if (desc.toLowerCase() === productName.trim().toLowerCase()) return ''
+  return desc
+}
+
+function descriptionLines(
+  text: string,
+  font: LabelDrawFonts['regular'],
+  size: number,
+  maxWidth: number,
+  maxLines: number,
+): string[] {
+  const parts = text
+    .split(/\s*\|\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (parts.length <= 1) return wrapWords(text, font, size, maxWidth, maxLines)
+
+  const lines: string[] = []
+  for (let i = 0; i < parts.length; i++) {
+    const remaining = maxLines - lines.length
+    if (remaining <= 0) {
+      if (lines.length) {
+        const last = lines[lines.length - 1]!.replace(/…$/, '')
+        let cut = last
+        while (cut.length > 1 && font.widthOfTextAtSize(`${cut}…`, size) > maxWidth) {
+          cut = cut.slice(0, -1)
+        }
+        lines[lines.length - 1] = `${cut}…`
+      }
+      break
+    }
+    lines.push(...wrapWords(parts[i]!, font, size, maxWidth, remaining))
+  }
+  return lines.slice(0, maxLines)
 }
 
 function drawBarcodeColumn(
@@ -248,18 +315,17 @@ function drawBarcodeColumn(
     locationAtTop?: boolean
     locationLeftOfBarcode?: boolean
     captionAbove?: string
-    hashItemNumber?: boolean
   },
 ): void {
   const pad = 1.5
   const itemSize = 7.5
-  const locSize = 8
+  const locSize = LOCATION_SIZE
   const captionSize = 9.5
   const loc = opts?.locationCode?.trim() ?? ''
   const locAtTop = Boolean(opts?.locationAtTop && loc)
   const locLeft = Boolean(opts?.locationLeftOfBarcode && loc)
   const caption = opts?.captionAbove?.trim() ?? ''
-  const itemLabel = opts?.hashItemNumber ? `# ${itemHash(payload)}` : itemHash(payload)
+  const itemLabel = `# ${itemHash(payload)}`
   const locOnItemLine = Boolean(loc && !locAtTop && !locLeft)
   const itemH = Math.max(itemSize, locOnItemLine ? locSize : itemSize) + 3
   const topH = (caption ? captionSize + 4 : 0) + (locAtTop ? locSize + 3 : 0)
@@ -343,7 +409,7 @@ function drawBarcodeColumn(
 
 /**
  * Dress stock label (Avery 5160):
- * Left: variants, struck MSRP, sale price
+ * Left: description, struck MSRP, sale price
  * Right: size/color, barcode, item # with store code
  */
 function drawStockLabel(
@@ -359,7 +425,7 @@ function drawStockLabel(
   const rightX = midX + 1
   const rightW = x + w - pad - rightX
 
-  const sizeColorH = 30
+  const sizeColorH = BARCODE_TOP_RESERVE_H
   const sizeColorY = y + h - pad - sizeColorH
   page.drawRectangle({
     x: rightX,
@@ -404,26 +470,22 @@ function drawStockLabel(
 
   const msrpSize = 10
   const msrpY = priceBoxY + priceBoxH + 4
-  drawStruck(page, msrpLabel(payload), fonts.regular, msrpSize, x + pad, msrpY, leftW)
+  drawStruck(page, msrpLabel(payload), fonts.regular, msrpSize, x + pad, msrpY, priceBoxW, 'center')
 
-  const variantText =
-    payload.variantColors.length > 0 ? payload.variantColors.join(' ') : payload.color
-  const variantSize = 8
-  const variantCeiling = y + h - pad
-  const variantFloor = msrpY + msrpSize + 3
-  const variantLineH = variantSize + 1.6
-  const maxVariantLines = Math.max(1, Math.min(4, Math.floor((variantCeiling - variantFloor) / variantLineH)))
-  const variantLines = wrapWords(variantText, fonts.regular, variantSize, leftW, maxVariantLines)
-  let variantY = variantCeiling - variantSize
-  for (const line of variantLines) {
-    page.drawText(line, {
-      x: x + pad,
-      y: variantY,
-      size: variantSize,
-      font: fonts.regular,
-      color: BLACK,
-    })
-    variantY -= variantLineH
+  const descText = payload.description.trim()
+  if (descText) {
+    const descSize = 8
+    const descWidth = Math.max(8, leftW)
+    const descCeiling = y + h - pad
+    const descFloor = msrpY + msrpSize + 3
+    const descLineH = descSize + 1.6
+    const maxDescLines = Math.max(1, Math.min(4, Math.floor((descCeiling - descFloor) / descLineH)))
+    const descLines = descriptionLines(descText, fonts.regular, descSize, descWidth, maxDescLines)
+    let descY = descCeiling - descSize
+    for (const line of descLines) {
+      drawFitted(page, line, fonts.regular, descSize, x + pad, descY, descWidth, 'left')
+      descY -= descLineH
+    }
   }
 }
 
@@ -434,42 +496,14 @@ function drawJewelryTag(
   fonts: LabelDrawFonts,
 ): void {
   const { x, y, w, h } = boxToPt(box)
-  const rightW = 56
+  const rightW = 58
   const leftW = w - rightW
-  const nameH = 29
-  const pad = 2.5
-  const priceBoxX = x + 3
-  const priceBoxW = leftW - 6
-
-  const loc = payload.locationCode
-  const locSize = 9
-  drawWrappedInBox(
-    page,
-    displayName(payload),
-    fonts.bold,
-    12,
-    priceBoxX,
-    y + h - nameH,
-    priceBoxW,
-    nameH,
-    'center',
-    2,
-  )
-  if (loc) {
-    drawFitted(
-      page,
-      loc,
-      fonts.bold,
-      locSize,
-      priceBoxX,
-      y + h - pad - locSize,
-      priceBoxW,
-      'right',
-    )
-  }
-
+  const pad = 2
+  const priceBoxX = x + pad
+  const priceBoxW = leftW - pad * 2
   const priceBoxH = PRICE_BOX_H
-  const priceBoxY = y + 3
+  const priceBoxY = y + pad
+
   drawPriceBox(page, fonts, saleLabel(payload), priceBoxX, priceBoxY, priceBoxW, priceBoxH)
 
   const msrpSize = 10
@@ -484,7 +518,38 @@ function drawJewelryTag(
     priceBoxW,
     'center',
   )
-  drawBarcodeColumn(page, payload, fonts, x + leftW, y, rightW, h)
+
+  const colorText = payload.color && payload.color !== '—' ? payload.color : ''
+  const colorSize = 11
+  const colorBaseline = msrpY + msrpSize + 3
+  if (colorText) {
+    drawFitted(page, colorText, fonts.bold, colorSize, priceBoxX, colorBaseline, priceBoxW, 'center')
+  }
+
+  const nameFloor = (colorText ? colorBaseline + colorSize : msrpY + msrpSize) + 1
+  const nameH = Math.max(10, y + h - pad - nameFloor)
+  drawWrappedInBox(
+    page,
+    displayName(payload),
+    fonts.bold,
+    12,
+    priceBoxX,
+    nameFloor,
+    priceBoxW,
+    nameH,
+    'center',
+    nameH >= 24 ? 2 : 1,
+  )
+
+  const topRightY = y + h - pad - BARCODE_TOP_RESERVE_H
+  const loc = payload.locationCode
+  if (loc) {
+    const locBaseline = y + h - pad - LOCATION_SIZE - 1
+    drawFitted(page, loc, fonts.bold, LOCATION_SIZE, x + leftW, locBaseline, rightW, 'center')
+  }
+
+  const barcodeColH = Math.max(18, topRightY - 2 - (y + pad))
+  drawBarcodeColumn(page, payload, fonts, x + leftW, y + pad, rightW, barcodeColH)
 }
 
 function drawShoesTag(
@@ -496,7 +561,7 @@ function drawShoesTag(
   const { x, y, w, h } = boxToPt(box)
   const rightW = 58
   const leftW = w - rightW
-  const pad = 2.5
+  const pad = 2
   const priceBoxX = x + pad
   const priceBoxW = leftW - pad * 2
   const priceBoxH = PRICE_BOX_H
@@ -504,47 +569,35 @@ function drawShoesTag(
 
   drawPriceBox(page, fonts, saleLabel(payload), priceBoxX, priceBoxY, priceBoxW, priceBoxH)
 
-  const colorsText = shoeAvailableColors(payload)
+  const msrpSize = 9
+  const msrpY = priceBoxY + priceBoxH + 3
+  drawStruck(
+    page,
+    msrpLabel(payload),
+    fonts.regular,
+    msrpSize,
+    priceBoxX,
+    msrpY,
+    priceBoxW,
+    'center',
+  )
+
   const nameText = shoeName(payload)
   const sizeText = payload.size && payload.size !== '—' ? payload.size : ''
   const colorText = payload.color && payload.color !== '—' ? payload.color : ''
+  const descText = shoeDescription(payload, nameText)
 
-  const sizeSize = 11
-  const colorSize = 12
-  const gap = 2
-  const priceTop = priceBoxY + priceBoxH
-  const colorBaseline = priceTop + 3
+  const sizeSize = 10
+  const colorSize = 11
+  const gap = 1.5
+  const colorBaseline = msrpY + msrpSize + gap + 1
   const sizeBaseline = colorBaseline + colorSize + gap
 
-  if (colorsText) {
-    const colorsBottom = sizeText ? sizeBaseline + sizeSize + 1 : colorBaseline + colorSize + 1
-    const colorsH = Math.max(10, y + h - pad - colorsBottom)
-    drawWrappedInBox(
-      page,
-      colorsText,
-      fonts.regular,
-      6,
-      priceBoxX,
-      colorsBottom,
-      priceBoxW,
-      colorsH,
-      'center',
-      3,
-    )
-  } else if (nameText) {
-    const nameSize = 12
-    drawFitted(
-      page,
-      nameText,
-      fonts.bold,
-      nameSize,
-      priceBoxX,
-      (sizeText ? sizeBaseline + sizeSize : colorBaseline + colorSize) + gap,
-      priceBoxW,
-      'center',
-    )
+  if (nameText) {
+    const nameFloor = (sizeText ? sizeBaseline + sizeSize : colorBaseline + colorSize) + 1
+    const nameH = Math.max(8, y + h - pad - nameFloor)
+    drawWrappedInBox(page, nameText, fonts.bold, 8, priceBoxX, nameFloor, priceBoxW, nameH, 'center', 1)
   }
-
   if (sizeText) {
     drawFitted(page, sizeText, fonts.bold, sizeSize, priceBoxX, sizeBaseline, priceBoxW, 'center')
   }
@@ -552,11 +605,29 @@ function drawShoesTag(
     drawFitted(page, colorText, fonts.bold, colorSize, priceBoxX, colorBaseline, priceBoxW, 'center')
   }
 
-  drawBarcodeColumn(page, payload, fonts, x + leftW, y, rightW, h, {
-    locationCode: payload.locationCode,
-    locationLeftOfBarcode: true,
-    hashItemNumber: true,
-  })
+  const topRightH = BARCODE_TOP_RESERVE_H
+  const topRightY = y + h - pad - topRightH
+  const loc = payload.locationCode
+  const locBaseline = y + h - pad - LOCATION_SIZE - 1
+  if (loc) {
+    drawFitted(page, loc, fonts.bold, LOCATION_SIZE, x + leftW, locBaseline, rightW, 'center')
+  }
+  if (descText) {
+    const descSize = 6
+    const descLineH = descSize + 1.4
+    const descWidth = rightW - 2
+    const lines = descriptionLines(descText, fonts.regular, descSize, descWidth, 3)
+    let descBaseline = (loc ? locBaseline - 2.5 : y + h - pad - 1) - descSize
+    const minBaseline = topRightY + 0.5
+    for (const line of lines) {
+      if (descBaseline < minBaseline) break
+      drawFitted(page, line, fonts.regular, descSize, x + leftW + 1, descBaseline, descWidth, 'center')
+      descBaseline -= descLineH
+    }
+  }
+
+  const barcodeColH = Math.max(18, topRightY - 2 - (y + pad))
+  drawBarcodeColumn(page, payload, fonts, x + leftW, y + pad, rightW, barcodeColH)
 }
 
 function drawShoesStock(

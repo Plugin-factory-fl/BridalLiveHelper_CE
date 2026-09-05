@@ -9,7 +9,8 @@
     "server": "node server/index.mjs",
     "start": "node server/index.mjs",
     "package:zip": "npm run build && node scripts/zip-dist.mjs",
-    "mock-catalog:import": "node scripts/import-mock-catalog.mjs"
+    "mock-catalog:import": "node scripts/import-mock-catalog.mjs",
+    "preview:tags": "node scripts/preview-tag-layouts.mjs"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.4.0",

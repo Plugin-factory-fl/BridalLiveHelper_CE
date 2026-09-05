@@ -42,6 +42,9 @@ export type LabelPrintBatchRequest = {
   items: LabelLineItem[]
   averyStartRow?: number
   averyStartColumn?: number
+  /** Last slot to fill on page 1 (Mass Labeling). Later pages start at 1,1. */
+  averyEndRow?: number
+  averyEndColumn?: number
   /** Avery sheet preset id; defaults to avery-5160. */
   sheetId?: string
   /** Used when reprinting a single item without department on the line. */

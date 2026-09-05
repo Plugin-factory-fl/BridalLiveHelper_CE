@@ -38,6 +38,44 @@ export function normalizeHeader(value: unknown): string {
     .trim()
 }
 
+const SCAN_HEADERS = new Set([
+  'barcode',
+  'item #',
+  'item no',
+  'item number',
+  'itemnum',
+  'sku',
+  'scan',
+  'scanned',
+  'code',
+])
+
+/** True when a cell looks like a scan-gun / BridalLive item number. */
+export function looksLikeScanCode(value: unknown): boolean {
+  const raw = String(value ?? '')
+    .replace(/^\uFEFF/, '')
+    .trim()
+  if (!raw) return false
+  const cleaned = raw.replace(/^#\s*/, '')
+  if (cleaned.length < 2 || cleaned.length > 24) return false
+  return /^[A-Za-z0-9][A-Za-z0-9-]*$/.test(cleaned)
+}
+
+export function isScanHeader(value: unknown): boolean {
+  return SCAN_HEADERS.has(normalizeHeader(value))
+}
+
+export function normalizeScanCode(value: unknown): string {
+  const raw = String(value ?? '')
+    .replace(/^\uFEFF/, '')
+    .trim()
+    .replace(/^#\s*/, '')
+  if (typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value)) {
+    return String(value)
+  }
+  return raw
+}
+
 function isBlocked(key: SpreadsheetColumnKey, header: string): boolean {
   return (BLOCKED[key] ?? []).some((blocked) => header === normalizeHeader(blocked))
 }

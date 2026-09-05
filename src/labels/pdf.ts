@@ -12,26 +12,43 @@ export async function buildLabelPdf(
   sheet: AverySheetSpec,
   startRow = 1,
   startCol = 1,
+  endRow?: number,
+  endCol?: number,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
   const font = await doc.embedFont(StandardFonts.Helvetica)
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
   const fonts = { regular: font, bold: fontBold }
+  const pageWidth = sheet.pageWidthIn * IN_TO_PT
+  const pageHeight = sheet.pageHeightIn * IN_TO_PT
 
-  let slot = startSlotIndex(sheet, startRow, startCol)
-  let page = doc.addPage([sheet.pageWidthIn * IN_TO_PT, sheet.pageHeightIn * IN_TO_PT])
   const perPage = labelsPerPage(sheet)
+  const firstStart = startSlotIndex(sheet, startRow, startCol)
+  const firstEnd =
+    endRow != null && endCol != null
+      ? Math.max(firstStart, startSlotIndex(sheet, endRow, endCol))
+      : perPage - 1
+
+  const addPage = () => doc.addPage([pageWidth, pageHeight])
+
+  let page = addPage()
+  let isFirstPage = true
+  let slot = firstStart
 
   for (let i = 0; i < labels.length; i++) {
-    if (i > 0 && slot % perPage === 0) {
-      page = doc.addPage([sheet.pageWidthIn * IN_TO_PT, sheet.pageHeightIn * IN_TO_PT])
+    if (isFirstPage && slot > firstEnd) {
+      page = addPage()
+      isFirstPage = false
+      slot = 0
+    } else if (!isFirstPage && i > 0 && slot % perPage === 0) {
+      page = addPage()
     }
 
-    const slotOnPage = slot % perPage
+    const slotOnPage = isFirstPage ? slot : slot % perPage
     const { xIn, yIn } = slotPosition(sheet, slotOnPage)
     drawLabel(
       page,
-      labels[i],
+      labels[i]!,
       {
         xIn,
         yIn,
@@ -40,7 +57,7 @@ export async function buildLabelPdf(
       },
       fonts,
     )
-    slot++
+    slot += 1
   }
 
   return doc.save()

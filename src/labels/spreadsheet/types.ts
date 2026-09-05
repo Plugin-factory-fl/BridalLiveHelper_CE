@@ -1,3 +1,5 @@
+export type SpreadsheetKind = 'inventory-export' | 'scan-gun'
+
 export type SpreadsheetInventoryRow = {
   id: number
   itemNumber: string
@@ -13,6 +15,10 @@ export type SpreadsheetInventoryRow = {
   retailPrice: number | null
   salePrice: number | null
   selected: boolean
+  /** BridalLive department after a scan-gun lookup. */
+  department?: string
+  /** Set after matching a scan list to BridalLive. */
+  matched?: boolean
 }
 
 export type SpreadsheetColumnKey =
@@ -38,4 +44,7 @@ export type SpreadsheetParseResult = {
   mapped: SpreadsheetColumnMap
   rows: SpreadsheetInventoryRow[]
   skippedRows: number
+  kind: SpreadsheetKind
+  /** Total scan-gun reads before collapsing duplicates. */
+  scanCount?: number
 }

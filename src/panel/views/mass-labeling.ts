@@ -1,5 +1,8 @@
-import { expandMassSelectedRows, formatMassMoney, rowToMassPayload } from '../../labels/mass-expand'
+import { expandMassSelectedRows, expandScanRowsToLabelLines, formatMassMoney, rowToMassPayload } from '../../labels/mass-expand'
 import { buildMassLabelPdf } from '../../labels/mass-pdf'
+import { printLabelBatch } from '../../labels/print-batch'
+import { matchScanRowsToBridalLive } from '../../labels/lookup'
+import { AUTO_STYLE_LAYOUT_ID } from '../../labels/style-layouts'
 import { clampRange, pageCountForLabels } from '../../labels/layout'
 import { openPdfInNewTab } from '../../labels/pdf'
 import { parseSpreadsheet } from '../../labels/spreadsheet/parse'
@@ -20,7 +23,7 @@ export function mountMassLabeling(host: HTMLElement): () => void {
   host.innerHTML = `
     <div class="mass-labeling">
     <p class="labels-lead">
-      Upload a BridalLive inventory spreadsheet, choose the first and last label on a partly used sheet, then print.
+      Upload a scan-gun spreadsheet of item numbers, or a BridalLive inventory export. Scans are matched to BridalLive at your working location.
     </p>
     <form id="blh-mass-upload-form" class="mass-upload">
       <label class="mass-dropzone" id="blh-mass-dropzone">
@@ -32,7 +35,7 @@ export function mountMassLabeling(host: HTMLElement): () => void {
         />
         <span class="mass-drop-icon" aria-hidden="true"></span>
         <span class="mass-drop-title" id="blh-mass-drop-title">Drop your spreadsheet here</span>
-        <span class="muted small">.xlsx or .csv from BridalLive</span>
+        <span class="muted small">.xlsx or .csv — scan-gun list or BridalLive export</span>
         <span class="mass-choose">Choose file</span>
       </label>
     </form>
@@ -64,7 +67,7 @@ export function mountMassLabeling(host: HTMLElement): () => void {
         </div>
         <label class="mass-qty-toggle">
           <input type="checkbox" id="blh-mass-copies-qty" checked />
-          One label per quantity on hand
+          <span id="blh-mass-copies-label">One label per quantity on hand</span>
         </label>
         <ul id="blh-mass-item-list" class="mass-item-list receiving-lines"></ul>
         <p class="muted small" id="blh-mass-selection"></p>
@@ -105,7 +108,15 @@ export function mountMassLabeling(host: HTMLElement): () => void {
   const selectedRows = (): SpreadsheetInventoryRow[] =>
     state.parse?.rows.filter((row) => row.selected) ?? []
 
-  const labelCount = () => expandMassSelectedRows(selectedRows(), state.copiesFromQty).length
+  const labelCount = () => {
+    if (state.parse?.kind === 'scan-gun') {
+      return expandScanRowsToLabelLines(selectedRows(), state.copiesFromQty).reduce(
+        (sum, line) => sum + Math.max(1, line.quantity),
+        0,
+      )
+    }
+    return expandMassSelectedRows(selectedRows(), state.copiesFromQty).length
+  }
 
   const currentRange = () =>
     clampRange(sheet, state.startRow, state.startCol, state.endRow, state.endCol)
@@ -161,9 +172,22 @@ export function mountMassLabeling(host: HTMLElement): () => void {
 
   const paintPreview = () => {
     const preview = $('blh-mass-preview')
-    const row = selectedRows()[0] ?? state.parse?.rows[0]
+    const row = selectedRows().find((item) => item.matched !== false) ?? state.parse?.rows.find((item) => item.matched !== false)
     if (!row) {
       preview.replaceChildren()
+      return
+    }
+    if (state.parse?.kind === 'scan-gun') {
+      preview.innerHTML = `
+        <div class="mass-preview-copy">
+          <div>${escapeHtml(row.itemName || row.itemNumber)}</div>
+          <div>${escapeHtml([row.size, row.color].filter(Boolean).join(' · ') || 'No size/color')}</div>
+          <div class="mass-preview-split"><span>${escapeHtml(row.department || '')}</span><span>${escapeHtml(formatMassMoney(row.salePrice ?? row.retailPrice))}</span></div>
+        </div>
+        <div class="mass-preview-code">
+          <div class="mass-preview-barcode"></div>
+        </div>
+      `
       return
     }
     const label = rowToMassPayload(row)
@@ -191,14 +215,22 @@ export function mountMassLabeling(host: HTMLElement): () => void {
 
     list.innerHTML = rows
       .map((row) => {
-        const detail = [row.size, row.color].filter(Boolean).join(' · ')
+        const isScan = state.parse?.kind === 'scan-gun'
+        const unmatched = isScan && row.matched === false
+        const detail = unmatched
+          ? 'Not found at this location'
+          : [row.size, row.color].filter(Boolean).join(' · ')
+        const qtyLabel = isScan
+          ? `${row.quantity} scan${row.quantity === 1 ? '' : 's'}`
+          : `qty ${row.quantity}`
+        const price = unmatched ? '' : ` · ${formatMassMoney(row.salePrice ?? row.retailPrice)}`
         return `
-          <li class="receiving-line">
+          <li class="receiving-line${unmatched ? ' is-unmatched' : ''}">
             <label>
-              <input type="checkbox" data-id="${row.id}" ${row.selected ? 'checked' : ''} />
+              <input type="checkbox" data-id="${row.id}" ${row.selected ? 'checked' : ''} ${unmatched ? 'disabled' : ''} />
               <span>
                 <span class="mass-item-id">${escapeHtml(row.itemNumber || row.itemName)}</span>
-                <span class="muted small">${escapeHtml(detail || 'No size/color')} · ${formatMassMoney(row.salePrice ?? row.retailPrice)} · qty ${row.quantity}</span>
+                <span class="muted small">${escapeHtml(detail || 'No size/color')}${price} · ${qtyLabel}</span>
               </span>
             </label>
           </li>`
@@ -229,7 +261,17 @@ export function mountMassLabeling(host: HTMLElement): () => void {
 
   const showPrint = (result: SpreadsheetParseResult) => {
     state.parse = result
-    $('blh-mass-file-summary').textContent = `${result.fileName} · ${result.rows.length} items`
+    const copiesLabel = $('blh-mass-copies-label')
+    copiesLabel.textContent =
+      result.kind === 'scan-gun' ? 'One label per scan' : 'One label per quantity on hand'
+    const found = result.rows.filter((row) => row.matched !== false).length
+    if (result.kind === 'scan-gun') {
+      const scans = result.scanCount ?? result.rows.reduce((sum, row) => sum + row.quantity, 0)
+      $('blh-mass-file-summary').textContent =
+        `${result.fileName} · ${scans} scan${scans === 1 ? '' : 's'} · ${result.rows.length} unique · ${found} found in BridalLive`
+    } else {
+      $('blh-mass-file-summary').textContent = `${result.fileName} · ${result.rows.length} items`
+    }
     $('blh-mass-drop-title').textContent = result.fileName
     paintItemList()
     paintPreview()
@@ -242,7 +284,34 @@ export function mountMassLabeling(host: HTMLElement): () => void {
     $('blh-mass-drop-title').textContent = `Opening ${file.name}`
     try {
       const result = await parseSpreadsheet(file)
-      setStatus('blh-mass-upload-status', `${result.rows.length} items ready to print.`, 'success')
+      if (result.kind === 'scan-gun') {
+        setStatus('blh-mass-upload-status', `Matching ${result.rows.length} item numbers in BridalLive…`)
+        result.rows = await matchScanRowsToBridalLive(result.rows)
+        const found = result.rows.filter((row) => row.matched).length
+        const missing = result.rows.length - found
+        const scans = result.scanCount ?? result.rows.reduce((sum, row) => sum + row.quantity, 0)
+        if (found === 0) {
+          setStatus(
+            'blh-mass-upload-status',
+            'None of these scans matched items at this location. Sign in on Home and pick the shop you scanned.',
+            'error',
+          )
+        } else if (missing > 0) {
+          setStatus(
+            'blh-mass-upload-status',
+            `${found} matched · ${missing} not found · ${scans} scans.`,
+            'success',
+          )
+        } else {
+          setStatus(
+            'blh-mass-upload-status',
+            `${found} items matched in BridalLive (${scans} scans).`,
+            'success',
+          )
+        }
+      } else {
+        setStatus('blh-mass-upload-status', `${result.rows.length} items ready to print.`, 'success')
+      }
       showPrint(result)
     } catch (err) {
       setStatus(
@@ -255,18 +324,49 @@ export function mountMassLabeling(host: HTMLElement): () => void {
   }
 
   const printLabels = async () => {
-    const labels = expandMassSelectedRows(selectedRows(), state.copiesFromQty)
-    if (!labels.length) {
-      setStatus('blh-mass-print-status', 'Select at least one item first.', 'error')
-      return
-    }
-
     const range = currentRange()
     const printBtn = $('blh-mass-print-btn') as HTMLButtonElement
     printBtn.disabled = true
     printBtn.textContent = 'Preparing labels…'
     setStatus('blh-mass-print-status', '')
     try {
+      if (state.parse?.kind === 'scan-gun') {
+        const items = expandScanRowsToLabelLines(selectedRows(), state.copiesFromQty)
+        if (!items.length) {
+          setStatus(
+            'blh-mass-print-status',
+            'Select at least one item that matched in BridalLive.',
+            'error',
+          )
+          return
+        }
+        const result = await printLabelBatch({
+          styleLayoutId: AUTO_STYLE_LAYOUT_ID,
+          items,
+          averyStartRow: range.startRow,
+          averyStartColumn: range.startCol,
+          averyEndRow: range.endRow,
+          averyEndColumn: range.endCol,
+          sheetId: sheet.id,
+        })
+        if (!result.ok) {
+          setStatus('blh-mass-print-status', result.message, 'error')
+          return
+        }
+        const pages = result.pageCount ?? 1
+        setStatus(
+          'blh-mass-print-status',
+          `${result.labelCount} labels on ${pages} sheet${pages === 1 ? '' : 's'}. Print at 100% scale.`,
+          'success',
+        )
+        return
+      }
+
+      const labels = expandMassSelectedRows(selectedRows(), state.copiesFromQty)
+      if (!labels.length) {
+        setStatus('blh-mass-print-status', 'Select at least one item first.', 'error')
+        return
+      }
       const pdfBytes = await buildMassLabelPdf(
         labels,
         sheet,
@@ -355,7 +455,7 @@ export function mountMassLabeling(host: HTMLElement): () => void {
 
   $('blh-mass-select-all').addEventListener('click', () => {
     state.parse?.rows.forEach((row) => {
-      row.selected = true
+      row.selected = row.matched !== false
     })
     paintItemList()
     paintPreview()

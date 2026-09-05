@@ -1,4 +1,10 @@
-import { detectHeaderRow, mapColumns } from './map-columns'
+import {
+  detectHeaderRow,
+  isScanHeader,
+  looksLikeScanCode,
+  mapColumns,
+  normalizeScanCode,
+} from './map-columns'
 import type { SpreadsheetColumnKey, SpreadsheetInventoryRow, SpreadsheetParseResult } from './types'
 
 function cellString(row: unknown[], index: number | undefined): string {
@@ -120,6 +126,119 @@ async function readXlsx(file: File): Promise<{ sheetName: string; table: unknown
   }
 }
 
+function usedColumnCount(table: unknown[][]): number {
+  let max = 0
+  for (const row of table.slice(0, 40)) {
+    for (let i = 0; i < row.length; i++) {
+      if (row[i] != null && String(row[i]).trim() !== '') max = Math.max(max, i + 1)
+    }
+  }
+  return max
+}
+
+function firstNonEmptyCell(row: unknown[]): unknown {
+  return row.find((cell) => cell != null && String(cell).trim() !== '')
+}
+
+function scanCodeFromRow(row: unknown[]): string {
+  for (const cell of row) {
+    if (!looksLikeScanCode(cell)) continue
+    return normalizeScanCode(cell)
+  }
+  return ''
+}
+
+function isInventoryExportMapped(mapped: ReturnType<typeof mapColumns>): boolean {
+  return (
+    mapped.itemName != null ||
+    mapped.vendorItemName != null ||
+    mapped.color != null ||
+    mapped.size != null ||
+    mapped.retailPrice != null ||
+    mapped.salePrice != null ||
+    mapped.description != null ||
+    mapped.longDescription != null ||
+    mapped.vendorCode != null ||
+    mapped.deptCode != null
+  )
+}
+
+function isScanGunTable(
+  compact: unknown[][],
+  mapped: ReturnType<typeof mapColumns>,
+): boolean {
+  if (isInventoryExportMapped(mapped)) return false
+  if (usedColumnCount(compact) > 3) return false
+  const start = isScanHeader(firstNonEmptyCell(compact[0] ?? [])) ? 1 : 0
+  const data = compact.slice(start)
+  if (!data.length) return false
+  const hits = data.filter((row) => Boolean(scanCodeFromRow(row))).length
+  return hits >= Math.max(1, Math.ceil(data.length * 0.7))
+}
+
+function emptyScanRow(id: number, itemNumber: string, quantity: number): SpreadsheetInventoryRow {
+  return {
+    id,
+    itemNumber,
+    vendorCode: '',
+    deptCode: '',
+    itemName: itemNumber,
+    description: '',
+    longDescription: '',
+    vendorItemName: '',
+    color: '',
+    size: '',
+    quantity,
+    retailPrice: null,
+    salePrice: null,
+    selected: true,
+  }
+}
+
+function rowsFromScanGun(
+  fileName: string,
+  sheetName: string,
+  compact: unknown[][],
+): SpreadsheetParseResult {
+  const start = isScanHeader(firstNonEmptyCell(compact[0] ?? [])) ? 1 : 0
+  const counts = new Map<string, number>()
+  const order: string[] = []
+  let skippedRows = 0
+
+  for (let i = start; i < compact.length; i++) {
+    const code = scanCodeFromRow(compact[i] ?? [])
+    if (!code) {
+      skippedRows += 1
+      continue
+    }
+    if (!counts.has(code)) {
+      counts.set(code, 0)
+      order.push(code)
+    }
+    counts.set(code, (counts.get(code) ?? 0) + 1)
+  }
+
+  if (!order.length) {
+    throw new Error('Could not find any scanned item numbers in this spreadsheet.')
+  }
+
+  const rows = order.map((itemNumber, id) =>
+    emptyScanRow(id, itemNumber, counts.get(itemNumber) ?? 1),
+  )
+  const scanCount = rows.reduce((sum, row) => sum + row.quantity, 0)
+
+  return {
+    fileName,
+    sheetName,
+    headerRow: start,
+    mapped: { itemNumber: 0 },
+    rows,
+    skippedRows,
+    kind: 'scan-gun',
+    scanCount,
+  }
+}
+
 function rowsFromTable(
   fileName: string,
   sheetName: string,
@@ -134,9 +253,13 @@ function rowsFromTable(
   const headerRow = compact[headerIndex] ?? []
   const mapped = mapColumns(headerRow)
 
+  if (isScanGunTable(compact, mapped)) {
+    return rowsFromScanGun(fileName, sheetName, compact)
+  }
+
   if (mapped.itemNumber == null && mapped.itemName == null) {
     throw new Error(
-      'Could not find an Item # / Item Name column. Use a BridalLive inventory export (.csv or .xlsx).',
+      'Could not find scanned item numbers or an Item # / Item Name column. Use a scan-gun list or a BridalLive inventory export.',
     )
   }
 
@@ -185,6 +308,7 @@ function rowsFromTable(
     mapped,
     rows,
     skippedRows,
+    kind: 'inventory-export',
   }
 }
 
