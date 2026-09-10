@@ -15,7 +15,7 @@ import {
   AUTO_STYLE_LAYOUT_ID,
   autoDepartmentLayouts,
   getLabelStyleLayout,
-  layoutOptionsForDropdown,
+  layoutOptionsHtml,
   tagPreviewUrl,
 } from '../../labels/style-layouts'
 import { peekHelperSession, getWorkingLocationId } from '../../lib/helper-session'
@@ -41,33 +41,13 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function buildStyleLayoutOptions(): string {
-  const groups = new Map<string, ReturnType<typeof layoutOptionsForDropdown>>()
-  for (const opt of layoutOptionsForDropdown()) {
-    const list = groups.get(opt.group) ?? []
-    list.push(opt)
-    groups.set(opt.group, list)
-  }
-  return [...groups.entries()]
-    .map(
-      ([group, opts]) =>
-        `<optgroup label="${escapeHtml(group)}">${opts
-          .map(
-            (o) =>
-              `<option value="${escapeHtml(o.value)}"${o.value === AUTO_STYLE_LAYOUT_ID ? ' selected' : ''}>${escapeHtml(o.label)}</option>`,
-          )
-          .join('')}</optgroup>`,
-    )
-    .join('')
-}
-
 export const renderLabels: ViewRender = (root) => {
   if (!peekHelperSession()) {
     return renderSignInRequired(root, 'print labels')
   }
   const section = document.createElement('section')
   section.className = 'view view-labels'
-  const styleOptions = buildStyleLayoutOptions()
+  const styleOptions = layoutOptionsHtml()
 
   section.innerHTML = `
     <h2 class="view-title">Labels</h2>

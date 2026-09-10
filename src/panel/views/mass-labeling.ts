@@ -1,10 +1,14 @@
-import { expandMassSelectedRows, expandScanRowsToLabelLines, formatMassMoney, rowToMassPayload } from '../../labels/mass-expand'
-import { buildMassLabelPdf } from '../../labels/mass-pdf'
+import { expandSpreadsheetRowsToLabelLines, formatMassMoney } from '../../labels/mass-expand'
 import { printLabelBatch } from '../../labels/print-batch'
 import { matchScanRowsToBridalLive } from '../../labels/lookup'
-import { AUTO_STYLE_LAYOUT_ID } from '../../labels/style-layouts'
+import {
+  AUTO_STYLE_LAYOUT_ID,
+  autoDepartmentLayouts,
+  getLabelStyleLayout,
+  layoutOptionsHtml,
+  tagPreviewUrl,
+} from '../../labels/style-layouts'
 import { clampRange, pageCountForLabels } from '../../labels/layout'
-import { openPdfInNewTab } from '../../labels/pdf'
 import { parseSpreadsheet } from '../../labels/spreadsheet/parse'
 import type { SpreadsheetInventoryRow, SpreadsheetParseResult } from '../../labels/spreadsheet/types'
 import { AVERY_5160 } from '../../labels/templates'
@@ -51,9 +55,18 @@ export function mountMassLabeling(host: HTMLElement): () => void {
       </div>
 
       <fieldset class="fieldset mass-card">
+        <legend>Label design</legend>
+        <label class="label-style-picker">
+          <span class="label-style-picker-label">Design</span>
+          <select id="blh-mass-style-layout">${layoutOptionsHtml()}</select>
+        </label>
+        <div id="blh-mass-style-preview" class="label-style-preview" aria-live="polite"></div>
+      </fieldset>
+
+      <fieldset class="fieldset mass-card">
         <legend>Where should printing start?</legend>
         <p class="muted small">Click the first empty label, then the last one to fill on this sheet.</p>
-        <div id="blh-mass-grid" class="mass-grid" role="grid" aria-label="Avery 5160 sheet"></div>
+        <div id="blh-mass-grid" class="mass-grid" role="grid" aria-label="Avery 5160 / 6240 sheet"></div>
         <p class="muted small mass-grid-caption">
           From <strong id="blh-mass-start">1,1</strong> to <strong id="blh-mass-end">10,3</strong>
         </p>
@@ -75,7 +88,7 @@ export function mountMassLabeling(host: HTMLElement): () => void {
 
       <div class="mass-preview-wrap">
         <div id="blh-mass-preview" class="mass-preview" aria-hidden="true"></div>
-        <p class="muted small">Avery 5160 · 30 labels per sheet. Print at 100% — do not use Fit to page.</p>
+        <p class="muted small">Avery 5160 / 6240 · 30 labels per sheet. Print at 100% — do not use Fit to page.</p>
       </div>
       <button type="button" class="btn btn-primary btn-block" id="blh-mass-print-btn">Print labels</button>
       <p class="status" id="blh-mass-print-status" role="status"></p>
@@ -91,6 +104,7 @@ export function mountMassLabeling(host: HTMLElement): () => void {
     endCol: sheet.columns,
     picking: 'start' as 'start' | 'end',
     copiesFromQty: true,
+    styleLayoutId: AUTO_STYLE_LAYOUT_ID,
   }
 
   const $ = (id: string): HTMLElement => {
@@ -108,15 +122,11 @@ export function mountMassLabeling(host: HTMLElement): () => void {
   const selectedRows = (): SpreadsheetInventoryRow[] =>
     state.parse?.rows.filter((row) => row.selected) ?? []
 
-  const labelCount = () => {
-    if (state.parse?.kind === 'scan-gun') {
-      return expandScanRowsToLabelLines(selectedRows(), state.copiesFromQty).reduce(
-        (sum, line) => sum + Math.max(1, line.quantity),
-        0,
-      )
-    }
-    return expandMassSelectedRows(selectedRows(), state.copiesFromQty).length
-  }
+  const labelCount = () =>
+    expandSpreadsheetRowsToLabelLines(selectedRows(), state.copiesFromQty).reduce(
+      (sum, line) => sum + Math.max(1, line.quantity),
+      0,
+    )
 
   const currentRange = () =>
     clampRange(sheet, state.startRow, state.startCol, state.endRow, state.endCol)
@@ -170,34 +180,53 @@ export function mountMassLabeling(host: HTMLElement): () => void {
     paintGrid()
   }
 
+  const layoutThumb = (layout: ReturnType<typeof getLabelStyleLayout>) => {
+    if (!layout) return ''
+    const src = layout.previewImage ? tagPreviewUrl(layout.previewImage) : ''
+    const img = src
+      ? `<img class="label-style-preview-img" src="${escapeHtml(src)}" alt="${escapeHtml(layout.name)} tag" />`
+      : `<div class="label-style-preview-placeholder" aria-hidden="true"></div>`
+    return `<figure class="label-style-preview-figure">${img}</figure>`
+  }
+
+  const paintStylePreview = () => {
+    const preview = $('blh-mass-style-preview')
+    if (state.styleLayoutId === AUTO_STYLE_LAYOUT_ID) {
+      preview.innerHTML = `
+        <p class="label-style-preview-title">Label Preview</p>
+        <div class="label-style-preview-thumbs">${autoDepartmentLayouts().map((layout) => layoutThumb(layout)).join('')}</div>
+      `
+      return
+    }
+    const layout = getLabelStyleLayout(state.styleLayoutId)
+    if (!layout) {
+      preview.innerHTML = ''
+      return
+    }
+    const src = layout.previewImage ? tagPreviewUrl(layout.previewImage) : ''
+    const mockup = src
+      ? `<img class="label-style-preview-img label-style-preview-img--lg" src="${escapeHtml(src)}" alt="${escapeHtml(layout.name)} tag" />`
+      : ''
+    preview.innerHTML = `
+      <p class="label-style-preview-title">Label Preview</p>
+      ${mockup}
+    `
+  }
+
   const paintPreview = () => {
     const preview = $('blh-mass-preview')
-    const row = selectedRows().find((item) => item.matched !== false) ?? state.parse?.rows.find((item) => item.matched !== false)
+    const row =
+      selectedRows().find((item) => item.matched !== false) ??
+      state.parse?.rows.find((item) => item.matched !== false)
     if (!row) {
       preview.replaceChildren()
       return
     }
-    if (state.parse?.kind === 'scan-gun') {
-      preview.innerHTML = `
-        <div class="mass-preview-copy">
-          <div>${escapeHtml(row.itemName || row.itemNumber)}</div>
-          <div>${escapeHtml([row.size, row.color].filter(Boolean).join(' · ') || 'No size/color')}</div>
-          <div class="mass-preview-split"><span>${escapeHtml(row.department || '')}</span><span>${escapeHtml(formatMassMoney(row.salePrice ?? row.retailPrice))}</span></div>
-        </div>
-        <div class="mass-preview-code">
-          <div class="mass-preview-barcode"></div>
-        </div>
-      `
-      return
-    }
-    const label = rowToMassPayload(row)
     preview.innerHTML = `
       <div class="mass-preview-copy">
-        <div>${escapeHtml(label.itemName)}</div>
-        <div class="mass-preview-split"><span>${escapeHtml(label.deptCode)}</span><span>${escapeHtml(label.vendorCode)}</span></div>
-        <div>${escapeHtml(label.color)}</div>
-        <div class="mass-preview-split"><span>${escapeHtml(label.size)}</span><span>${escapeHtml(label.salePrice)}</span></div>
-        <div class="mass-preview-orig">${escapeHtml(label.origPrice)}</div>
+        <div>${escapeHtml(row.itemName || row.itemNumber)}</div>
+        <div>${escapeHtml([row.size, row.color].filter(Boolean).join(' · ') || 'No size/color')}</div>
+        <div class="mass-preview-split"><span>${escapeHtml(row.department || row.deptCode || '')}</span><span>${escapeHtml(formatMassMoney(row.salePrice ?? row.retailPrice))}</span></div>
       </div>
       <div class="mass-preview-code">
         <div class="mass-preview-barcode"></div>
@@ -275,6 +304,7 @@ export function mountMassLabeling(host: HTMLElement): () => void {
     $('blh-mass-drop-title').textContent = result.fileName
     paintItemList()
     paintPreview()
+    paintStylePreview()
     paintSelectionSummary()
     $('blh-mass-print').hidden = false
   }
@@ -330,60 +360,35 @@ export function mountMassLabeling(host: HTMLElement): () => void {
     printBtn.textContent = 'Preparing labels…'
     setStatus('blh-mass-print-status', '')
     try {
-      if (state.parse?.kind === 'scan-gun') {
-        const items = expandScanRowsToLabelLines(selectedRows(), state.copiesFromQty)
-        if (!items.length) {
-          setStatus(
-            'blh-mass-print-status',
-            'Select at least one item that matched in BridalLive.',
-            'error',
-          )
-          return
-        }
-        const result = await printLabelBatch({
-          styleLayoutId: AUTO_STYLE_LAYOUT_ID,
-          items,
-          averyStartRow: range.startRow,
-          averyStartColumn: range.startCol,
-          averyEndRow: range.endRow,
-          averyEndColumn: range.endCol,
-          sheetId: sheet.id,
-        })
-        if (!result.ok) {
-          setStatus('blh-mass-print-status', result.message, 'error')
-          return
-        }
-        const pages = result.pageCount ?? 1
+      const items = expandSpreadsheetRowsToLabelLines(selectedRows(), state.copiesFromQty)
+      if (!items.length) {
         setStatus(
           'blh-mass-print-status',
-          `${result.labelCount} labels on ${pages} sheet${pages === 1 ? '' : 's'}. Print at 100% scale.`,
-          'success',
+          state.parse?.kind === 'scan-gun'
+            ? 'Select at least one item that matched in BridalLive.'
+            : 'Select at least one item first.',
+          'error',
         )
         return
       }
-
-      const labels = expandMassSelectedRows(selectedRows(), state.copiesFromQty)
-      if (!labels.length) {
-        setStatus('blh-mass-print-status', 'Select at least one item first.', 'error')
+      const result = await printLabelBatch({
+        styleLayoutId: state.styleLayoutId,
+        items,
+        averyStartRow: range.startRow,
+        averyStartColumn: range.startCol,
+        averyEndRow: range.endRow,
+        averyEndColumn: range.endCol,
+        sheetId: sheet.id,
+        fallbackDepartment: getLabelStyleLayout(state.styleLayoutId)?.department ?? 'Dress',
+      })
+      if (!result.ok) {
+        setStatus('blh-mass-print-status', result.message, 'error')
         return
       }
-      const pdfBytes = await buildMassLabelPdf(
-        labels,
-        sheet,
-        range.startRow,
-        range.startCol,
-        range.endRow,
-        range.endCol,
-      )
-      const opened = await openPdfInNewTab(pdfBytes)
-      const pages = pageCountForLabels(labels.length, sheet, range.startIndex, range.endIndex)
-      if (!opened.ok) {
-        setStatus('blh-mass-print-status', opened.error, 'error')
-        return
-      }
+      const pages = result.pageCount ?? 1
       setStatus(
         'blh-mass-print-status',
-        `${labels.length} labels on ${pages} sheet${pages === 1 ? '' : 's'}. Print at 100% scale.`,
+        `${result.labelCount} labels on ${pages} sheet${pages === 1 ? '' : 's'}. Print at 100% scale.`,
         'success',
       )
     } catch (err) {
@@ -416,6 +421,12 @@ export function mountMassLabeling(host: HTMLElement): () => void {
   }
 
   buildGrid()
+  paintStylePreview()
+
+  $('blh-mass-style-layout').addEventListener('change', (event) => {
+    state.styleLayoutId = (event.target as HTMLSelectElement).value || AUTO_STYLE_LAYOUT_ID
+    paintStylePreview()
+  })
 
   const dropzone = $('blh-mass-dropzone')
   const fileInput = $('blh-mass-file') as HTMLInputElement

@@ -25,21 +25,21 @@ const SAMPLES = [
     file: 'dress.png',
     original: 'Dress.png',
     payload: {
-      itemNumber: '49154',
-      style: '4554',
-      itemName: '4554',
-      description: '4554 ivory lace A-line gown, chapel train',
+      itemNumber: '40410',
+      style: '40410',
+      itemName: '40410',
+      description: 'Deep Green, Mauve, Wine',
       vendor: 'PRIVRA1',
       department: 'Dress',
-      size: '12',
-      color: 'Ivory',
-      price: '$629.99',
-      msrp: '$699.99',
-      salePrice: '$629.99',
+      size: '16',
+      color: 'Wine',
+      price: '$449.00',
+      msrp: '$526.00',
+      salePrice: '$449.00',
       variantColors: [],
       availableSizes: [],
-      locationCode: 'PLM',
-      barcodeValue: '49154',
+      locationCode: 'PK',
+      barcodeValue: '40410',
       styleLayoutId: 'dress-classic',
     },
   },
@@ -69,21 +69,21 @@ const SAMPLES = [
     file: 'shoes-stock.png',
     original: 'Shoes Stock.png',
     payload: {
-      itemNumber: '328179',
-      style: 'Annie',
-      itemName: 'Badgley Mischka Annie',
-      description: 'Colors: Ivory | Sizes: 6–11',
+      itemNumber: '41970',
+      style: 'Celina-16',
+      itemName: 'Celina-16',
+      description: 'Colors: Red | Sizes: 6–11',
       vendor: 'BM',
       department: 'Shoes',
-      size: '7.5',
-      color: 'Ivory',
-      price: '$72.00',
+      size: '6.5',
+      color: 'Red',
+      price: '$69.99',
       msrp: '$89.99',
-      salePrice: '$72.00',
+      salePrice: '$69.99',
       variantColors: [],
       availableSizes: [],
-      locationCode: 'PLM',
-      barcodeValue: '328179',
+      locationCode: 'PK',
+      barcodeValue: '41970',
       styleLayoutId: 'shoes-stock',
     },
   },
@@ -111,10 +111,18 @@ const SAMPLES = [
   },
 ]
 
-async function bundleDrawLabel(outFile) {
+async function bundlePreviewModules(outFile) {
   await esbuild.build({
     absWorkingDir: root,
-    entryPoints: ['src/labels/draw-label.ts'],
+    stdin: {
+      contents: `
+        export { drawLabel } from './src/labels/draw-label.ts'
+        export { AVERY_5160 } from './src/labels/templates.ts'
+        export { slotDrawBox } from './src/labels/layout.ts'
+      `,
+      resolveDir: root,
+      sourcefile: 'preview-entry.ts',
+    },
     bundle: true,
     platform: 'node',
     format: 'esm',
@@ -167,14 +175,56 @@ async function renderSample(drawLabel, sample, workDir) {
 
   const originalPath = join(root, 'tags', sample.original)
   copyFileSync(pngPath, originalPath)
+  if (sample.file === 'shoes-stock.png') {
+    copyFileSync(pdfPath, join(root, 'tags', 'shoes-stock-sample.pdf'))
+    console.log('wrote tags/shoes-stock-sample.pdf')
+  }
+  if (sample.file === 'dress.png') {
+    copyFileSync(pdfPath, join(root, 'tags', 'original-price-sample.pdf'))
+    console.log('wrote tags/original-price-sample.pdf')
+  }
   console.log(`wrote public/tags/${sample.file} and tags/${sample.original}`)
+}
+
+async function renderSampleSheet(drawLabel, AVERY_5160, slotDrawBox, workDir) {
+  const doc = await PDFDocument.create()
+  const pageWidth = AVERY_5160.pageWidthIn * IN_TO_PT
+  const pageHeight = AVERY_5160.pageHeightIn * IN_TO_PT
+  const page = doc.addPage([pageWidth, pageHeight])
+  page.setMediaBox(0, 0, pageWidth, pageHeight)
+  page.setCropBox(0, 0, pageWidth, pageHeight)
+  const fonts = {
+    regular: await doc.embedFont(StandardFonts.Helvetica),
+    bold: await doc.embedFont(StandardFonts.HelveticaBold),
+  }
+
+  const dress = SAMPLES.find((sample) => sample.file === 'dress.png')
+  const shoesStock = SAMPLES.find((sample) => sample.file === 'shoes-stock.png')
+  const jewelry = SAMPLES.find((sample) => sample.file === 'jewelry.png')
+  const sheetLabels = [
+    shoesStock.payload,
+    shoesStock.payload,
+    dress.payload,
+    shoesStock.payload,
+    dress.payload,
+    jewelry.payload,
+  ]
+
+  for (let i = 0; i < sheetLabels.length; i++) {
+    drawLabel(page, sheetLabels[i], slotDrawBox(AVERY_5160, i), fonts)
+  }
+
+  const pdfPath = join(workDir, 'avery-5160-sample.pdf')
+  writeFileSync(pdfPath, await doc.save())
+  copyFileSync(pdfPath, join(root, 'tags', 'avery-5160-sample.pdf'))
+  console.log('wrote tags/avery-5160-sample.pdf (print at 100% on Avery 5160 / 6240)')
 }
 
 const workDir = join(root, '.tmp-preview-tags')
 mkdirSync(workDir, { recursive: true })
 const bundlePath = join(workDir, 'draw-label.mjs')
-await bundleDrawLabel(bundlePath)
-const { drawLabel } = await import(pathToFileURL(bundlePath).href)
+await bundlePreviewModules(bundlePath)
+const { drawLabel, AVERY_5160, slotDrawBox } = await import(pathToFileURL(bundlePath).href)
 
 mkdirSync(join(root, 'public/tags'), { recursive: true })
 mkdirSync(join(root, 'tags'), { recursive: true })
@@ -182,3 +232,5 @@ mkdirSync(join(root, 'tags'), { recursive: true })
 for (const sample of SAMPLES) {
   await renderSample(drawLabel, sample, workDir)
 }
+
+await renderSampleSheet(drawLabel, AVERY_5160, slotDrawBox, workDir)

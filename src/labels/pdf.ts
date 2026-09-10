@@ -1,11 +1,20 @@
-import { PDFDocument, StandardFonts } from 'pdf-lib'
+import { PDFDocument, PDFName, StandardFonts } from 'pdf-lib'
 import { isBridalLiveAppUrl, PDF_VIEWER_ZOOM, STORAGE_KEYS } from '../lib/config'
 import { drawLabel } from './draw-label'
 import type { LabelPayload } from './types'
 import type { AverySheetSpec } from './templates'
-import { labelsPerPage, slotPosition, startSlotIndex } from './layout'
+import { labelsPerPage, slotDrawBox, startSlotIndex } from './layout'
 
 const IN_TO_PT = 72
+
+export function disablePrintScaling(doc: PDFDocument): void {
+  doc.catalog.set(
+    PDFName.of('ViewerPreferences'),
+    doc.context.obj({
+      PrintScaling: PDFName.of('None'),
+    }),
+  )
+}
 
 export async function buildLabelPdf(
   labels: LabelPayload[],
@@ -29,7 +38,12 @@ export async function buildLabelPdf(
       ? Math.max(firstStart, startSlotIndex(sheet, endRow, endCol))
       : perPage - 1
 
-  const addPage = () => doc.addPage([pageWidth, pageHeight])
+  const addPage = () => {
+    const page = doc.addPage([pageWidth, pageHeight])
+    page.setMediaBox(0, 0, pageWidth, pageHeight)
+    page.setCropBox(0, 0, pageWidth, pageHeight)
+    return page
+  }
 
   let page = addPage()
   let isFirstPage = true
@@ -45,21 +59,11 @@ export async function buildLabelPdf(
     }
 
     const slotOnPage = isFirstPage ? slot : slot % perPage
-    const { xIn, yIn } = slotPosition(sheet, slotOnPage)
-    drawLabel(
-      page,
-      labels[i]!,
-      {
-        xIn,
-        yIn,
-        widthIn: sheet.labelWidthIn,
-        heightIn: sheet.labelHeightIn,
-      },
-      fonts,
-    )
+    drawLabel(page, labels[i]!, slotDrawBox(sheet, slotOnPage), fonts)
     slot += 1
   }
 
+  disablePrintScaling(doc)
   return doc.save()
 }
 

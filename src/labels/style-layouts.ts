@@ -21,7 +21,7 @@ export type LabelStyleLayout = {
 
 const DRESS_FIELDS = [
   'Description',
-  'MSRP (strikethrough)',
+  'Original Price (strikethrough)',
   'Sale price',
   'Store code',
   'Size + color',
@@ -32,7 +32,7 @@ const DRESS_FIELDS = [
 const JEWELRY_FIELDS = [
   'Item name',
   'Color',
-  'MSRP (strikethrough)',
+  'Original Price (strikethrough)',
   'Store code',
   'Sale price',
   'Barcode',
@@ -41,9 +41,8 @@ const JEWELRY_FIELDS = [
 
 const SHOES_FIELDS = [
   'Name',
-  'Size',
-  'Color',
-  'MSRP (strikethrough)',
+  'Size + color',
+  'Original Price (strikethrough)',
   'Sale price',
   'Store code',
   'Description',
@@ -57,7 +56,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     department: 'Dress',
     name: 'Dress — stock',
     description:
-      'Description top-left, struck MSRP and sale price; size/color, barcode, item # and store code on the right.',
+      'Description top-left, original price and sale price; size/color, barcode, item # and store code on the right.',
     fields: DRESS_FIELDS,
     status: 'client',
     previewImage: 'tags/dress.png',
@@ -67,7 +66,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     department: 'Shoes',
     name: 'Shoes',
     description:
-      'Product name, size, and color over a struck MSRP and price box; location and description above a dress-height barcode.',
+      'Product name with size and color on one line over original price and a price box; location and description above a dress-height barcode.',
     fields: SHOES_FIELDS,
     status: 'client',
     previewImage: 'tags/shoes.png',
@@ -76,7 +75,8 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     id: 'shoes-stock',
     department: 'Shoes',
     name: 'Shoes — stock',
-    description: 'Product name, size, and color over a struck MSRP and price box; location and description above a dress-height barcode.',
+    description:
+      'Product name with size and color on one line over original price and a price box; location and description above a dress-height barcode.',
     fields: SHOES_FIELDS,
     status: 'client',
     previewImage: 'tags/shoes-stock.png',
@@ -171,13 +171,26 @@ export function layoutOptionsForDropdown(): Array<{
   return options
 }
 
-export function describeLayoutSelection(selection: string): string {
-  if (selection === AUTO_STYLE_LAYOUT_ID) {
-    return 'Each label uses the tag for its department: Dress stock, Shoes, or Jewelry.'
+export function layoutOptionsHtml(selected = AUTO_STYLE_LAYOUT_ID): string {
+  const groups = new Map<string, ReturnType<typeof layoutOptionsForDropdown>>()
+  for (const opt of layoutOptionsForDropdown()) {
+    const list = groups.get(opt.group) ?? []
+    list.push(opt)
+    groups.set(opt.group, list)
   }
-  const layout = getLabelStyleLayout(selection)
-  if (!layout) return ''
-  return layout.description
+  const escape = (value: string) =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return [...groups.entries()]
+    .map(
+      ([group, opts]) =>
+        `<optgroup label="${escape(group)}">${opts
+          .map(
+            (o) =>
+              `<option value="${escape(o.value)}"${o.value === selected ? ' selected' : ''}>${escape(o.label)}</option>`,
+          )
+          .join('')}</optgroup>`,
+    )
+    .join('')
 }
 
 export function tagPreviewUrl(path: string | undefined): string {

@@ -5,11 +5,12 @@ import { LABEL_STYLE_LAYOUTS } from './style-layouts'
 /**
  * Avery sheet geometry — US Letter, 30-up address labels.
  *
- * Public specs (Avery Template 5160 / compatible 8160):
+ * Public specs (Avery Template 5160; 6240 uses the same template):
  * @see https://www.avery.com/templates/5160
  * @see https://www.avery.com/products/labels/5160
+ * @see https://www.avery.com/products/labels/6240
  *
- * | Property          | Value              |
+ * | Property          | Spec               |
  * |-------------------|--------------------|
  * | Label size        | 2.625" × 1"        |
  * | Sheet             | 8.5" × 11" Letter  |
@@ -18,6 +19,10 @@ import { LABEL_STYLE_LAYOUTS } from './style-layouts'
  * | Left margin       | 0.1875" (3/16")    |
  * | Vertical pitch    | 1" (labels touch)  |
  * | Horizontal pitch  | 2.75" (1/8" gap)   |
+ *
+ * Physical 5160 / 6240 prints sat high and tight to the perforations.
+ * `contentInset*` keeps artwork inside each sticker; the grid stays on spec
+ * so later rows do not walk off the sheet.
  */
 export type AverySheetSpec = {
   id: string
@@ -34,12 +39,18 @@ export type AverySheetSpec = {
   marginLeftIn: number
   horizontalPitchIn: number
   verticalPitchIn: number
+  /** Empty space at the top of each physical label (inches). */
+  contentInsetTopIn: number
+  /** Empty space at the bottom of each physical label (inches). */
+  contentInsetBottomIn: number
+  /** Empty space on the left and right of each physical label (inches). */
+  contentInsetXIn: number
 }
 
 export const AVERY_5160: AverySheetSpec = {
   id: 'avery-5160',
-  name: 'Avery 5160 / 8160 (30-up)',
-  averyProductNumbers: ['5160', '8160', '5260', '8460'],
+  name: 'Avery 5160 / 6240 (30-up)',
+  averyProductNumbers: ['5160', '8160', '5260', '8460', '6240'],
   pageWidthIn: 8.5,
   pageHeightIn: 11,
   columns: 3,
@@ -50,6 +61,9 @@ export const AVERY_5160: AverySheetSpec = {
   marginLeftIn: 0.1875,
   horizontalPitchIn: 2.75,
   verticalPitchIn: 1,
+  contentInsetTopIn: 0.06,
+  contentInsetBottomIn: 0.045,
+  contentInsetXIn: 0.05,
 }
 
 export const DEFAULT_SHEET = AVERY_5160

@@ -81,7 +81,7 @@ export function scanRowToLabelLine(
     style: row.itemName || undefined,
     size: row.size || undefined,
     color: row.color || undefined,
-    department: asDepartment(row.department),
+    department: departmentFromRow(row),
     retailPrice: row.retailPrice ?? undefined,
     salePrice: row.salePrice ?? undefined,
   }
@@ -91,7 +91,38 @@ export function expandScanRowsToLabelLines(
   rows: SpreadsheetInventoryRow[],
   copiesFromQty: boolean,
 ): LabelLineItem[] {
+  return expandSpreadsheetRowsToLabelLines(rows, copiesFromQty)
+}
+
+function departmentFromRow(row: SpreadsheetInventoryRow): Department | undefined {
+  const named = asDepartment(row.department)
+  if (named) return named
+  const code = row.deptCode.trim().toUpperCase()
+  if (code.startsWith('SH')) return 'Shoes'
+  if (code.startsWith('JW')) return 'Jewelry'
+  if (code.startsWith('DS') || code.startsWith('DR')) return 'Dress'
+  return asDepartment(row.deptCode)
+}
+
+/** Scan-gun or BridalLive export rows → print lines for department tags. */
+export function expandSpreadsheetRowsToLabelLines(
+  rows: SpreadsheetInventoryRow[],
+  copiesFromQty: boolean,
+): LabelLineItem[] {
   return rows
     .filter((row) => row.selected && row.matched !== false)
-    .map((row) => scanRowToLabelLine(row, copiesFromQty))
+    .map((row) => {
+      const itemNumber = row.itemNumber || row.vendorItemName || row.itemName
+      return {
+        itemNumber,
+        quantity: copiesFromQty ? Math.max(1, row.quantity || 1) : 1,
+        vendorItemName: row.vendorItemName || undefined,
+        style: row.itemName || undefined,
+        size: row.size || undefined,
+        color: row.color || undefined,
+        department: departmentFromRow(row),
+        retailPrice: row.retailPrice ?? undefined,
+        salePrice: row.salePrice ?? undefined,
+      }
+    })
 }

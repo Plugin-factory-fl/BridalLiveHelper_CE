@@ -192,23 +192,47 @@ function displayName(payload: LabelPayload): string {
   return name || style || payload.itemNumber
 }
 
-function msrpLabel(payload: LabelPayload): string {
-  const value = payload.msrp || payload.price
-  if (!value || value === '$—') return 'MSRP:'
-  const trimmed = value.trim()
-  if (trimmed.toUpperCase().startsWith('MSRP')) return trimmed
-  return `MSRP: ${trimmed}`
+function originalPriceAmount(payload: LabelPayload): string {
+  const value = (payload.msrp || payload.price).trim()
+  if (!value || value === '$—') return ''
+  return value.replace(/^(MSRP|Original Price):\s*/i, '').trim()
 }
 
 function saleLabel(payload: LabelPayload): string {
   return payload.salePrice || payload.price || '$—'
 }
 
-const PRICE_BOX_H = 22
+const PRICE_BOX_H = 14.5
+const ORIG_PRICE_SIZE = 7.5
 /** Right-column space above the barcode on dress, shoe, and jewelry tags. */
-const BARCODE_TOP_RESERVE_H = 30
+const BARCODE_TOP_RESERVE_H = 28
 /** Store code (PLM / PK) — shared size so dress matches shoes and jewelry. */
 const LOCATION_SIZE = 9
+
+/**
+ * "Original Price" caption with the struck retail amount underneath.
+ * Returns the Y just above the block so callers can stack copy on top.
+ */
+function drawOriginalPriceBlock(
+  page: PDFPage,
+  fonts: LabelDrawFonts,
+  payload: LabelPayload,
+  x: number,
+  yBottom: number,
+  w: number,
+): number {
+  const amount = originalPriceAmount(payload)
+  const caption = 'Original Price'
+  const size = ORIG_PRICE_SIZE
+  const gap = 1.5
+  const amountBaseline = yBottom
+  if (amount) {
+    drawStruck(page, amount, fonts.regular, size, x, amountBaseline, w, 'center')
+  }
+  const captionBaseline = amountBaseline + size + gap
+  drawFitted(page, caption, fonts.regular, size, x, captionBaseline, w, 'center', MUTED)
+  return captionBaseline + size + 2
+}
 
 function drawPriceBox(
   page: PDFPage,
@@ -227,7 +251,7 @@ function drawPriceBox(
     borderColor: BLACK,
     borderWidth: 1.1,
   })
-  const size = Math.min(16, Math.max(11, h * 0.7))
+  const size = Math.min(13, Math.max(10, h * 0.72))
   const baseline = y + (h - size) / 2 + size * 0.12
   drawFitted(page, price, fonts.bold, size, x + 2, baseline, w - 4, 'center')
 }
@@ -318,9 +342,9 @@ function drawBarcodeColumn(
   },
 ): void {
   const pad = 1.5
-  const itemSize = 7.5
+  const itemSize = 8
   const locSize = LOCATION_SIZE
-  const captionSize = 9.5
+  const captionSize = 10
   const loc = opts?.locationCode?.trim() ?? ''
   const locAtTop = Boolean(opts?.locationAtTop && loc)
   const locLeft = Boolean(opts?.locationLeftOfBarcode && loc)
@@ -409,7 +433,7 @@ function drawBarcodeColumn(
 
 /**
  * Dress stock label (Avery 5160):
- * Left: description, struck MSRP, sale price
+ * Left: description, original price, sale price
  * Right: size/color, barcode, item # with store code
  */
 function drawStockLabel(
@@ -419,7 +443,7 @@ function drawStockLabel(
   fonts: LabelDrawFonts,
 ): void {
   const { x, y, w, h } = boxToPt(box)
-  const pad = 2
+  const pad = 2.5
   const midX = x + w * 0.5
   const leftW = midX - x - pad
   const rightX = midX + 1
@@ -468,16 +492,21 @@ function drawStockLabel(
   const priceBoxW = leftW - pad
   drawPriceBox(page, fonts, saleLabel(payload), x + pad, priceBoxY, priceBoxW, priceBoxH)
 
-  const msrpSize = 10
-  const msrpY = priceBoxY + priceBoxH + 4
-  drawStruck(page, msrpLabel(payload), fonts.regular, msrpSize, x + pad, msrpY, priceBoxW, 'center')
+  const origTop = drawOriginalPriceBlock(
+    page,
+    fonts,
+    payload,
+    x + pad,
+    priceBoxY + priceBoxH + 3,
+    priceBoxW,
+  )
 
   const descText = payload.description.trim()
   if (descText) {
     const descSize = 8
     const descWidth = Math.max(8, leftW)
     const descCeiling = y + h - pad
-    const descFloor = msrpY + msrpSize + 3
+    const descFloor = origTop + 1
     const descLineH = descSize + 1.6
     const maxDescLines = Math.max(1, Math.min(4, Math.floor((descCeiling - descFloor) / descLineH)))
     const descLines = descriptionLines(descText, fonts.regular, descSize, descWidth, maxDescLines)
@@ -498,7 +527,7 @@ function drawJewelryTag(
   const { x, y, w, h } = boxToPt(box)
   const rightW = 58
   const leftW = w - rightW
-  const pad = 2
+  const pad = 2.5
   const priceBoxX = x + pad
   const priceBoxW = leftW - pad * 2
   const priceBoxH = PRICE_BOX_H
@@ -506,27 +535,23 @@ function drawJewelryTag(
 
   drawPriceBox(page, fonts, saleLabel(payload), priceBoxX, priceBoxY, priceBoxW, priceBoxH)
 
-  const msrpSize = 10
-  const msrpY = priceBoxY + priceBoxH + 5
-  drawStruck(
+  const origTop = drawOriginalPriceBlock(
     page,
-    msrpLabel(payload),
-    fonts.regular,
-    msrpSize,
+    fonts,
+    payload,
     priceBoxX,
-    msrpY,
+    priceBoxY + priceBoxH + 3,
     priceBoxW,
-    'center',
   )
 
   const colorText = payload.color && payload.color !== '—' ? payload.color : ''
   const colorSize = 11
-  const colorBaseline = msrpY + msrpSize + 3
+  const colorBaseline = origTop + 1
   if (colorText) {
     drawFitted(page, colorText, fonts.bold, colorSize, priceBoxX, colorBaseline, priceBoxW, 'center')
   }
 
-  const nameFloor = (colorText ? colorBaseline + colorSize : msrpY + msrpSize) + 1
+  const nameFloor = (colorText ? colorBaseline + colorSize : origTop) + 1
   const nameH = Math.max(10, y + h - pad - nameFloor)
   drawWrappedInBox(
     page,
@@ -561,7 +586,7 @@ function drawShoesTag(
   const { x, y, w, h } = boxToPt(box)
   const rightW = 58
   const leftW = w - rightW
-  const pad = 2
+  const pad = 2.5
   const priceBoxX = x + pad
   const priceBoxW = leftW - pad * 2
   const priceBoxH = PRICE_BOX_H
@@ -569,40 +594,53 @@ function drawShoesTag(
 
   drawPriceBox(page, fonts, saleLabel(payload), priceBoxX, priceBoxY, priceBoxW, priceBoxH)
 
-  const msrpSize = 9
-  const msrpY = priceBoxY + priceBoxH + 3
-  drawStruck(
+  const origTop = drawOriginalPriceBlock(
     page,
-    msrpLabel(payload),
-    fonts.regular,
-    msrpSize,
+    fonts,
+    payload,
     priceBoxX,
-    msrpY,
+    priceBoxY + priceBoxH + 2.5,
     priceBoxW,
-    'center',
   )
 
   const nameText = shoeName(payload)
   const sizeText = payload.size && payload.size !== '—' ? payload.size : ''
   const colorText = payload.color && payload.color !== '—' ? payload.color : ''
   const descText = shoeDescription(payload, nameText)
+  const sizeColorText = [sizeText, colorText].filter(Boolean).join(' · ')
 
-  const sizeSize = 10
-  const colorSize = 11
-  const gap = 1.5
-  const colorBaseline = msrpY + msrpSize + gap + 1
-  const sizeBaseline = colorBaseline + colorSize + gap
-
+  const sizeColorSize = 12
+  const nameSize = 10.5
+  const nameLineH = nameSize + 1.8
+  const nameCeiling = y + h - pad
+  const nameFloorMin = origTop + sizeColorSize + 4
+  const nameH = Math.max(nameSize, Math.min(nameLineH * 2, nameCeiling - nameFloorMin))
+  const nameFloor = nameCeiling - nameH
   if (nameText) {
-    const nameFloor = (sizeText ? sizeBaseline + sizeSize : colorBaseline + colorSize) + 1
-    const nameH = Math.max(8, y + h - pad - nameFloor)
-    drawWrappedInBox(page, nameText, fonts.bold, 8, priceBoxX, nameFloor, priceBoxW, nameH, 'center', 1)
+    drawWrappedInBox(
+      page,
+      nameText,
+      fonts.bold,
+      nameSize,
+      priceBoxX,
+      nameFloor,
+      priceBoxW,
+      nameH,
+      'center',
+      nameH >= nameLineH * 1.6 ? 2 : 1,
+    )
   }
-  if (sizeText) {
-    drawFitted(page, sizeText, fonts.bold, sizeSize, priceBoxX, sizeBaseline, priceBoxW, 'center')
-  }
-  if (colorText) {
-    drawFitted(page, colorText, fonts.bold, colorSize, priceBoxX, colorBaseline, priceBoxW, 'center')
+  if (sizeColorText) {
+    drawFitted(
+      page,
+      sizeColorText,
+      fonts.bold,
+      sizeColorSize,
+      priceBoxX,
+      nameFloor - 2.5 - sizeColorSize,
+      priceBoxW,
+      'center',
+    )
   }
 
   const topRightH = BARCODE_TOP_RESERVE_H
@@ -613,7 +651,7 @@ function drawShoesTag(
     drawFitted(page, loc, fonts.bold, LOCATION_SIZE, x + leftW, locBaseline, rightW, 'center')
   }
   if (descText) {
-    const descSize = 6
+    const descSize = 7.5
     const descLineH = descSize + 1.4
     const descWidth = rightW - 2
     const lines = descriptionLines(descText, fonts.regular, descSize, descWidth, 3)

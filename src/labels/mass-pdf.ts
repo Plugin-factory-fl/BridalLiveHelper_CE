@@ -1,19 +1,11 @@
-import { PDFDocument, PDFName, StandardFonts } from 'pdf-lib'
+import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { drawMassLabel } from './draw-mass-label'
-import { labelsPerPage, slotPosition, startSlotIndex } from './layout'
+import { labelsPerPage, slotDrawBox, startSlotIndex } from './layout'
+import { disablePrintScaling } from './pdf'
 import type { AverySheetSpec } from './templates'
 import type { MassLabelPayload } from './mass-types'
 
 const IN_TO_PT = 72
-
-function disablePrintScaling(doc: PDFDocument): void {
-  doc.catalog.set(
-    PDFName.of('ViewerPreferences'),
-    doc.context.obj({
-      PrintScaling: PDFName.of('None'),
-    }),
-  )
-}
 
 /** Avery 5160 PDF using BridalLive’s default tag layout, with a start–end range on page 1. */
 export async function buildMassLabelPdf(
@@ -55,18 +47,7 @@ export async function buildMassLabelPdf(
     }
 
     const slotOnPage = isFirstPage ? slot : slot % perPage
-    const { xIn, yIn } = slotPosition(sheet, slotOnPage)
-    drawMassLabel(
-      page,
-      labels[i]!,
-      {
-        xIn,
-        yIn,
-        widthIn: sheet.labelWidthIn,
-        heightIn: sheet.labelHeightIn,
-      },
-      font,
-    )
+    drawMassLabel(page, labels[i]!, slotDrawBox(sheet, slotOnPage), font)
     slot += 1
   }
 

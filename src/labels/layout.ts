@@ -28,6 +28,24 @@ export function slotPosition(
   return { xIn, yIn, row: row + 1, col: col + 1 }
 }
 
+export type LabelSlotBox = {
+  xIn: number
+  yIn: number
+  widthIn: number
+  heightIn: number
+}
+
+/** Drawable area inside one Avery slot, inset from the perforations. */
+export function slotDrawBox(sheet: AverySheetSpec, slotIndex: number): LabelSlotBox {
+  const { xIn, yIn } = slotPosition(sheet, slotIndex)
+  return {
+    xIn: xIn + sheet.contentInsetXIn,
+    yIn: yIn + sheet.contentInsetBottomIn,
+    widthIn: sheet.labelWidthIn - sheet.contentInsetXIn * 2,
+    heightIn: sheet.labelHeightIn - sheet.contentInsetTopIn - sheet.contentInsetBottomIn,
+  }
+}
+
 export function labelsPerPage(sheet: AverySheetSpec): number {
   return sheet.columns * sheet.rows
 }
