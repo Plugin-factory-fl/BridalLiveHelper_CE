@@ -50,13 +50,23 @@ const SHOES_FIELDS = [
   'Item #',
 ]
 
+const SHOES_STOCK_FIELDS = [
+  'Name',
+  'Color',
+  'Size',
+  'Sale price',
+  'Store code',
+  'Barcode',
+  'Item #',
+]
+
 export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
   {
     id: 'dress-classic',
     department: 'Dress',
     name: 'Dress — stock',
     description:
-      'Description top-left, original price and sale price; size/color, barcode, item # and store code on the right.',
+      'Description top-left; original price and sale price on the left; size and color, barcode, item # and store code on the right.',
     fields: DRESS_FIELDS,
     status: 'client',
     previewImage: 'tags/dress.png',
@@ -66,7 +76,7 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     department: 'Shoes',
     name: 'Shoes',
     description:
-      'Product name with size and color on one line over original price and a price box; location and description above a dress-height barcode.',
+      'Product name over size and color, original price on one line, and a sale price box; location and description above the barcode.',
     fields: SHOES_FIELDS,
     status: 'client',
     previewImage: 'tags/shoes.png',
@@ -76,8 +86,8 @@ export const LABEL_STYLE_LAYOUTS: LabelStyleLayout[] = [
     department: 'Shoes',
     name: 'Shoes — stock',
     description:
-      'Product name with size and color on one line over original price and a price box; location and description above a dress-height barcode.',
-    fields: SHOES_FIELDS,
+      'Larger name, color, and size on their own lines over a sale price; barcode and store code on the right. No original price.',
+    fields: SHOES_STOCK_FIELDS,
     status: 'client',
     previewImage: 'tags/shoes-stock.png',
   },

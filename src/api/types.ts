@@ -34,6 +34,8 @@ export type LabelLineItem = {
   department?: Department
   retailPrice?: number
   salePrice?: number
+  /** Per-line layout (reprint shoe tag vs shoe stock). Wins over the batch design picker. */
+  styleLayoutId?: string
 }
 
 export type LabelPrintBatchRequest = {

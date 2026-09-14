@@ -150,7 +150,10 @@ export function enrichFromCatalog(
   const match = findCatalogMatch(line, catalog)
 
   const department = lineDepartment(line, match, options.fallbackDepartment)
-  const styleLayoutId = resolveStyleLayoutId(options.styleLayoutSelection, department)
+  const styleLayoutId = resolveStyleLayoutId(
+    line.styleLayoutId || options.styleLayoutSelection,
+    department,
+  )
   const itemNumber = match?.itemNumber ?? line.itemNumber.trim()
   const color = line.color ?? match?.color ?? '—'
   const size = line.size ?? match?.size ?? '—'

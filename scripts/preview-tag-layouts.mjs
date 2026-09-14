@@ -144,7 +144,7 @@ function rasterizePdf(pdfPath, pngPath) {
   copyFileSync(generated, pngPath)
 }
 
-async function renderSample(drawLabel, sample, workDir) {
+async function renderSample(drawLabel, AVERY_5160, sample, workDir) {
   const doc = await PDFDocument.create()
   const page = doc.addPage([LABEL_W_IN * IN_TO_PT, LABEL_H_IN * IN_TO_PT])
   page.drawRectangle({
@@ -161,7 +161,12 @@ async function renderSample(drawLabel, sample, workDir) {
   drawLabel(
     page,
     sample.payload,
-    { xIn: 0, yIn: 0, widthIn: LABEL_W_IN, heightIn: LABEL_H_IN },
+    {
+      xIn: AVERY_5160.contentInsetXIn,
+      yIn: AVERY_5160.contentInsetBottomIn,
+      widthIn: LABEL_W_IN - AVERY_5160.contentInsetXIn * 2,
+      heightIn: LABEL_H_IN - AVERY_5160.contentInsetTopIn - AVERY_5160.contentInsetBottomIn,
+    },
     fonts,
   )
 
@@ -230,7 +235,7 @@ mkdirSync(join(root, 'public/tags'), { recursive: true })
 mkdirSync(join(root, 'tags'), { recursive: true })
 
 for (const sample of SAMPLES) {
-  await renderSample(drawLabel, sample, workDir)
+  await renderSample(drawLabel, AVERY_5160, sample, workDir)
 }
 
 await renderSampleSheet(drawLabel, AVERY_5160, slotDrawBox, workDir)

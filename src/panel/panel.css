@@ -1589,6 +1589,29 @@ body {
   flex: 1;
 }
 
+.reprint-shoe-layouts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.reprint-layout-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: var(--blh-font-size);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.reprint-list-copy {
+  flex: 1;
+  min-width: 0;
+}
+
 .reprint-list-heading {
   font-size: var(--blh-font-size);
   font-weight: 600;

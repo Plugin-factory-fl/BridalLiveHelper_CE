@@ -12,6 +12,8 @@ export type ReprintQueueItem = {
   color: string
   department: string
   vendorItemName: string
+  /** When set, this shoe row prints as the stock layout instead of the shoe tag. */
+  stockLabel?: boolean
 }
 
 export type LabelsUiState = {
