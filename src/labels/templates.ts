@@ -20,9 +20,9 @@ import { LABEL_STYLE_LAYOUTS } from './style-layouts'
  * | Vertical pitch    | 1" (labels touch)  |
  * | Horizontal pitch  | 2.75" (1/8" gap)   |
  *
- * Physical 5160 / 6240 prints sat high and tight to the perforations.
- * `contentInset*` keeps artwork inside each sticker; the grid stays on spec
- * so later rows do not walk off the sheet.
+ * Physical 5160 / 6240 prints sat high and clipped the top of each sticker.
+ * Extra `contentInsetTopIn` drops artwork; the grid stays on spec so later
+ * rows do not walk off the sheet.
  */
 export type AverySheetSpec = {
   id: string
@@ -61,8 +61,8 @@ export const AVERY_5160: AverySheetSpec = {
   marginLeftIn: 0.1875,
   horizontalPitchIn: 2.75,
   verticalPitchIn: 1,
-  contentInsetTopIn: 0.06,
-  contentInsetBottomIn: 0.045,
+  contentInsetTopIn: 0.11,
+  contentInsetBottomIn: 0.04,
   contentInsetXIn: 0.05,
 }
 

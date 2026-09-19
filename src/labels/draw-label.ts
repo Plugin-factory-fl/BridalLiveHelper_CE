@@ -180,7 +180,7 @@ function saleLabel(payload: LabelPayload): string {
 const PRICE_BOX_H = 18
 /** Slightly shorter sale box on shoe stock so name / color / size can grow. */
 const PRICE_BOX_H_STOCK = 15.5
-const ORIG_PRICE_SIZE = 7.5
+const ORIG_PRICE_SIZE = 8.5
 /** Right-column space above the barcode. Do not change — barcode height depends on this. */
 const BARCODE_TOP_RESERVE_H = 28
 /** Store code (PLM / PK) — shared size so dress matches shoes and jewelry. */
@@ -541,30 +541,14 @@ function drawStockLabel(
   })
 
   const innerY = y + pad
-  const innerH = h - pad * 2
-  const origH = originalPriceBlockHeight() + ORIG_PRICE_GAP
   const descText = payload.description.trim()
   const descWidth = Math.max(8, leftW)
-  let descSize = 10.5
-  let priceBoxH = PRICE_BOX_H
-  let descLines = descText
-    ? descriptionLines(descText, fonts.regular, descSize, descWidth, 4)
+  const descSize = 7.5
+  const descLineH = descSize + 1.3
+  const priceBoxH = PRICE_BOX_H
+  const descLines = descText
+    ? descriptionLines(descText, fonts.regular, descSize, descWidth, 3)
     : []
-  const stackH = () =>
-    descLines.length * (descSize + 1.5) + (descLines.length ? 2 : 0) + origH + priceBoxH
-  while (innerH - stackH() > 5) {
-    let grew = false
-    if (descText && descSize < 13) {
-      descSize += 0.5
-      descLines = descriptionLines(descText, fonts.regular, descSize, descWidth, 4)
-      grew = true
-    }
-    if (innerH - stackH() > 5 && priceBoxH < 20) {
-      priceBoxH += 0.5
-      grew = true
-    }
-    if (!grew) break
-  }
 
   const priceBoxY = innerY
   const priceBoxW = leftW - pad
@@ -580,10 +564,9 @@ function drawStockLabel(
   )
 
   if (descLines.length) {
-    const descLineH = descSize + 1.5
     const descCeiling = y + h - pad
     const descFloor = origTop + 1
-    const maxFit = Math.max(1, Math.floor((descCeiling - descFloor) / descLineH))
+    const maxFit = Math.max(1, Math.min(3, Math.floor((descCeiling - descFloor) / descLineH)))
     const lines = descLines.slice(0, maxFit)
     let descY = descCeiling - descSize
     for (const line of lines) {
@@ -692,12 +675,13 @@ function drawShoesTag(
   const descText = shoeDescription(payload, nameText)
   const sizeColorText = [sizeText, colorText].filter(Boolean).join(' · ')
 
-  const sizeColorSize = 13
-  const nameSize = maxSizeForWidth(fonts.bold, nameText, priceBoxW, 16, 9.5)
+  const sizeColorSize = 12
+  const nameSize = maxSizeForWidth(fonts.bold, nameText, priceBoxW, 15, 9.5)
   const nameLineH = nameSize + 1.6
   const nameCeiling = y + h - pad
-  const nameFloorMin = origTop + sizeColorSize + 2.5
-  const nameH = Math.max(nameSize, Math.min(nameLineH * 2, nameCeiling - nameFloorMin))
+  const sizeColorBaseline = origTop + 3.5
+  const nameFloorMin = sizeColorBaseline + sizeColorSize + 2
+  const nameH = Math.max(8, Math.min(nameLineH * 2, nameCeiling - nameFloorMin))
   const nameFloor = nameCeiling - nameH
   const nameMaxLines =
     fonts.bold.widthOfTextAtSize(nameText.trim(), nameSize) <= priceBoxW
@@ -726,7 +710,7 @@ function drawShoesTag(
       fonts.bold,
       sizeColorSize,
       priceBoxX,
-      nameFloor - 2 - sizeColorSize,
+      sizeColorBaseline,
       priceBoxW,
       'center',
     )
