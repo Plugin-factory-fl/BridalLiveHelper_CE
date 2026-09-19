@@ -193,6 +193,7 @@ function originalPriceBlockHeight(): number {
 
 /**
  * "Original Price $111.99" on one line, strike only on the amount.
+ * Long amounts shrink the line slightly instead of abbreviating to "Orig."
  * Returns the Y just above the block so callers can stack copy on top.
  */
 function drawOriginalPriceBlock(
@@ -210,24 +211,15 @@ function drawOriginalPriceBlock(
     return baseline + originalPriceBlockHeight()
   }
 
-  const captions = ['Original Price ', 'Orig. '] as const
+  const caption = 'Original Price '
   let usedSize = ORIG_PRICE_SIZE
-  let caption: string = captions[0]
-  let captionW = 0
-  let amountW = 0
-
-  const fits = (label: string, size: number) => {
-    const cw = fonts.regular.widthOfTextAtSize(label, size)
-    const aw = fonts.regular.widthOfTextAtSize(amount, size)
-    return cw + aw <= w
-  }
-
-  while (usedSize > 6 && !captions.some((label) => fits(label, usedSize))) {
+  const fits = (size: number) =>
+    fonts.regular.widthOfTextAtSize(caption, size) + fonts.regular.widthOfTextAtSize(amount, size) <= w
+  while (usedSize > 6.5 && !fits(usedSize)) {
     usedSize -= 0.25
   }
-  caption = captions.find((label) => fits(label, usedSize)) ?? captions[1]
-  captionW = fonts.regular.widthOfTextAtSize(caption, usedSize)
-  amountW = fonts.regular.widthOfTextAtSize(amount, usedSize)
+  const captionW = fonts.regular.widthOfTextAtSize(caption, usedSize)
+  const amountW = fonts.regular.widthOfTextAtSize(amount, usedSize)
 
   const start = x + Math.max(0, (w - captionW - amountW) / 2)
   page.drawText(caption, {

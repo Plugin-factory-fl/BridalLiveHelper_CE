@@ -1596,6 +1596,10 @@ body {
   flex: 0 0 auto;
 }
 
+.reprint-list-row .reprint-layout-check {
+  padding: 0;
+}
+
 .reprint-layout-check {
   display: flex;
   align-items: center;

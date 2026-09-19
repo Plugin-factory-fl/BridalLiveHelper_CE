@@ -142,16 +142,6 @@ export const renderLabels: ViewRender = (root) => {
       <ul id="blh-reprint-results" class="reprint-results" hidden></ul>
       <div class="reprint-add-row">
         <label>Quantity <input id="blh-reprint-qty" name="quantity" type="number" min="1" value="1" /></label>
-        <div id="blh-reprint-shoe-layouts" class="reprint-shoe-layouts" hidden>
-          <label class="reprint-layout-check">
-            <input type="checkbox" id="blh-reprint-shoe-tag" checked />
-            Shoe
-          </label>
-          <label class="reprint-layout-check">
-            <input type="checkbox" id="blh-reprint-shoe-stock" />
-            Stock
-          </label>
-        </div>
         <button type="button" class="btn btn-reprint" id="blh-reprint-add" disabled>Add to Label List</button>
       </div>
       <h3 class="reprint-list-heading">Label list</h3>
@@ -217,9 +207,6 @@ export const renderLabels: ViewRender = (root) => {
   const reprintHintEl = section.querySelector('#blh-reprint-search-hint') as HTMLElement
   const reprintListEl = section.querySelector('#blh-reprint-list') as HTMLElement
   const reprintAddBtn = section.querySelector('#blh-reprint-add') as HTMLButtonElement
-  const reprintShoeLayoutsEl = section.querySelector('#blh-reprint-shoe-layouts') as HTMLElement
-  const reprintShoeTagInput = section.querySelector('#blh-reprint-shoe-tag') as HTMLInputElement
-  const reprintShoeStockInput = section.querySelector('#blh-reprint-shoe-stock') as HTMLInputElement
   const styleSelect = section.querySelector('#blh-label-style-layout') as HTMLSelectElement
   const stylePreview = section.querySelector('#blh-label-style-preview') as HTMLElement
   const voucherSelect = section.querySelector('#blh-receiving-voucher') as HTMLSelectElement
@@ -252,14 +239,8 @@ export const renderLabels: ViewRender = (root) => {
     })
   }
 
-  const paintReprintShoeLayouts = () => {
-    const match = reprintResults.find((item) => item.id === selectedReprintId)
-    reprintShoeLayoutsEl.hidden = !(match && isShoesDepartment(match.department))
-  }
-
   const paintReprintResults = () => {
     reprintAddBtn.disabled = !selectedReprintId
-    paintReprintShoeLayouts()
     if (reprintResults.length === 0) {
       reprintResultsEl.hidden = true
       reprintResultsEl.innerHTML = ''
@@ -748,18 +729,12 @@ export const renderLabels: ViewRender = (root) => {
       return
     }
     const quantity = Math.max(1, Math.floor(Number(reprintQtyInput.value) || 1))
-    const isShoe = isShoesDepartment(match.department)
-    const wantStock = isShoe && reprintShoeStockInput.checked
-    const wantTag = !isShoe || reprintShoeTagInput.checked || !wantStock
-
-    const addOrMerge = (stockLabel: boolean) => {
-      const existing = reprintQueue.find(
-        (row) => row.itemNumber === match.itemNumber && Boolean(row.stockLabel) === stockLabel,
-      )
-      if (existing) {
-        existing.quantity += quantity
-        return
-      }
+    const existing = reprintQueue.find(
+      (row) => row.itemNumber === match.itemNumber && !row.stockLabel,
+    )
+    if (existing) {
+      existing.quantity += quantity
+    } else {
       reprintQueue = [
         ...reprintQueue,
         {
@@ -770,13 +745,9 @@ export const renderLabels: ViewRender = (root) => {
           color: match.color,
           department: match.department,
           vendorItemName: match.vendorItemName,
-          stockLabel: stockLabel || undefined,
         },
       ]
     }
-
-    if (wantTag) addOrMerge(false)
-    if (wantStock) addOrMerge(true)
     paintReprintList()
     persistUiState()
     setStatus(`Added ${match.itemNumber} × ${quantity} to the label list.`, 'success')
