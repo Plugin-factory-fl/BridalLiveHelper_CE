@@ -177,6 +177,22 @@ function saleLabel(payload: LabelPayload): string {
   return payload.salePrice || payload.price || '$—'
 }
 
+function parseMoneyAmount(value: string): number | null {
+  const n = Number(value.replace(/[^0-9.-]/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+
+/** True when retail/MSRP is a different amount from the price in the box. */
+function hasDistinctOriginalPrice(payload: LabelPayload): boolean {
+  const original = originalPriceAmount(payload)
+  if (!original) return false
+  const sale = saleLabel(payload)
+  const originalN = parseMoneyAmount(original)
+  const saleN = parseMoneyAmount(sale)
+  if (originalN == null || saleN == null) return original !== sale
+  return Math.abs(originalN - saleN) > 0.001
+}
+
 const PRICE_BOX_H = 18
 /** Slightly shorter sale box on shoe stock so name / color / size can grow. */
 const PRICE_BOX_H_STOCK = 15.5
@@ -194,6 +210,7 @@ function originalPriceBlockHeight(): number {
 /**
  * "Original Price $111.99" on one line, strike only on the amount.
  * Long amounts shrink the line slightly instead of abbreviating to "Orig."
+ * Hidden when sale and retail are the same (or there is no original).
  * Returns the Y just above the block so callers can stack copy on top.
  */
 function drawOriginalPriceBlock(
@@ -204,12 +221,11 @@ function drawOriginalPriceBlock(
   yBottom: number,
   w: number,
 ): number {
-  const amount = originalPriceAmount(payload)
   const baseline = yBottom
-  if (!amount) {
-    drawFitted(page, 'Original Price', fonts.regular, ORIG_PRICE_SIZE, x, baseline, w, 'center', MUTED)
-    return baseline + originalPriceBlockHeight()
+  if (!hasDistinctOriginalPrice(payload)) {
+    return baseline
   }
+  const amount = originalPriceAmount(payload)
 
   const caption = 'Original Price '
   let usedSize = ORIG_PRICE_SIZE

@@ -206,12 +206,25 @@ async function renderSampleSheet(drawLabel, AVERY_5160, slotDrawBox, workDir) {
   const dress = SAMPLES.find((sample) => sample.file === 'dress.png')
   const shoesStock = SAMPLES.find((sample) => sample.file === 'shoes-stock.png')
   const jewelry = SAMPLES.find((sample) => sample.file === 'jewelry.png')
+  const dressNoMarkdown = {
+    ...dress.payload,
+    itemNumber: '40275',
+    style: '40275',
+    itemName: '40275',
+    description: 'Black, Emerald, Navy, Silver, Wine',
+    size: '14',
+    color: 'Navy',
+    price: '$320.00',
+    msrp: '$320.00',
+    salePrice: '$320.00',
+    barcodeValue: '40275',
+  }
   const sheetLabels = [
     shoesStock.payload,
     shoesStock.payload,
     dress.payload,
+    dressNoMarkdown,
     shoesStock.payload,
-    dress.payload,
     jewelry.payload,
   ]
 
@@ -239,3 +252,4 @@ for (const sample of SAMPLES) {
 }
 
 await renderSampleSheet(drawLabel, AVERY_5160, slotDrawBox, workDir)
+
