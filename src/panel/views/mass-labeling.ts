@@ -1,6 +1,6 @@
 import { expandSpreadsheetRowsToLabelLines, formatMassMoney } from '../../labels/mass-expand'
 import { printLabelBatch } from '../../labels/print-batch'
-import { matchScanRowsToBridalLive } from '../../labels/lookup'
+import { attachBridalLiveDescriptions, matchScanRowsToBridalLive } from '../../labels/lookup'
 import {
   AUTO_STYLE_LAYOUT_ID,
   autoDepartmentLayouts,
@@ -340,6 +340,8 @@ export function mountMassLabeling(host: HTMLElement): () => void {
           )
         }
       } else {
+        setStatus('blh-mass-upload-status', `Reading descriptions for ${result.rows.length} items in BridalLive…`)
+        result.rows = await attachBridalLiveDescriptions(result.rows)
         setStatus('blh-mass-upload-status', `${result.rows.length} items ready to print.`, 'success')
       }
       showPrint(result)

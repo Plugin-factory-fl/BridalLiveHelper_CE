@@ -26,6 +26,32 @@ const NAME_MAX = 101.5
 const COL1_MAX = 46.28
 const COL2_MAX = 55
 
+const DESC_SIZE = 6
+
+function wrapDesc(font: PDFFont, text: string, size: number, maxW: number, maxLines: number): string[] {
+  if (maxLines <= 0) return []
+  const words = text.replace(/\s+/g, ' ').trim().split(' ')
+  const lines: string[] = []
+  let cur = ''
+  for (let i = 0; i < words.length; i++) {
+    const next = cur ? `${cur} ${words[i]}` : words[i]!
+    if (font.widthOfTextAtSize(next, size) <= maxW || !cur) {
+      cur = next
+      continue
+    }
+    lines.push(cur)
+    cur = words[i]!
+    if (lines.length === maxLines) {
+      cur = ''
+      lines[maxLines - 1] = `${lines[maxLines - 1]} ${words.slice(i).join(' ')}`
+      break
+    }
+  }
+  if (cur) lines.push(cur)
+  /* Last line gets an ellipsis from drawLine if it is too wide. */
+  return lines.slice(0, maxLines)
+}
+
 export type MassLabelDrawBox = {
   xIn: number
   yIn: number
@@ -94,6 +120,26 @@ export function drawMassLabel(
   drawLine(page, payload.size, left, line4, font, COL1_MAX)
   drawLine(page, payload.salePrice, col2, line4, font, COL2_MAX)
   drawLine(page, payload.origPrice, col2, origY, font, COL2_MAX, ORIG_SIZE)
+
+  /* Store code and small description in the space above the barcode, right column. */
+  const colX = x + BARCODE_X
+  const loc = (payload.locationCode ?? '').trim()
+  let top = y + FIRST_BASELINE + FONT_SIZE
+  if (loc) {
+    drawLine(page, loc, colX, y + FIRST_BASELINE, font, BARCODE_W)
+    top = y + FIRST_BASELINE - 1.5
+  }
+  const desc = (payload.description ?? '').trim()
+  if (desc) {
+    const floor = y + BAR_Y + BAR_H + 1.5
+    const lines = wrapDesc(font, desc, DESC_SIZE, BARCODE_W, Math.floor((top - floor) / (DESC_SIZE + 1)))
+    let baseline = top - DESC_SIZE
+    for (const line of lines) {
+      if (baseline < floor) break
+      drawLine(page, line, colX, baseline, font, BARCODE_W, DESC_SIZE)
+      baseline -= DESC_SIZE + 1
+    }
+  }
 
   drawCode128Barcode(payload.barcodeValue || payload.itemNumber, {
     x: x + BARCODE_X,

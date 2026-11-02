@@ -1,6 +1,7 @@
 import type { InventoryItem } from '../types/inventory'
 import type { LabelLineItem } from '../api/types'
 import type { SpreadsheetInventoryRow } from './spreadsheet/types'
+import { locationShorthand } from '../lib/location-code'
 import { getWorkingLocationId } from '../lib/helper-session'
 import { resolveDataSource } from '../lib/data-source'
 import { getMockCatalog } from '../inventory/mock-provider'
@@ -160,7 +161,8 @@ export async function matchScanRowsToBridalLive(
       matched: true,
       itemNumber: match.itemNumber,
       itemName: match.vendorItemName || match.style || match.itemNumber,
-      description: match.description ?? '',
+      bridalLiveDescription: match.description ?? '',
+      locationCode: locationShorthand(match.locationName ?? ''),
       vendorItemName: match.vendorItemName,
       vendorCode: match.vendorCode ?? row.vendorCode,
       color: match.color,
@@ -172,5 +174,40 @@ export async function matchScanRowsToBridalLive(
     })
   }
 
+  return out
+}
+
+/**
+ * Inventory export path for Mass Labeling: keep the sheet's own fields, but read
+ * each item's BridalLive Description and store code by item number (like reprint).
+ */
+export async function attachBridalLiveDescriptions(
+  rows: SpreadsheetInventoryRow[],
+  storeId?: string,
+): Promise<SpreadsheetInventoryRow[]> {
+  const resolvedStoreId = storeId || (await getWorkingLocationId())
+  const cache = new Map<string, InventoryItem | null>()
+  const out: SpreadsheetInventoryRow[] = []
+  for (const row of rows) {
+    const key = row.itemNumber.trim()
+    if (key && !cache.has(key)) {
+      try {
+        cache.set(key, await lookupInventoryByItemNumber(key, resolvedStoreId))
+      } catch (err) {
+        console.warn(`[labels] Lookup failed for item #${key}:`, err)
+        cache.set(key, null)
+      }
+    }
+    const match = key ? (cache.get(key) ?? null) : null
+    out.push(
+      match
+        ? {
+            ...row,
+            bridalLiveDescription: match.description ?? '',
+            locationCode: locationShorthand(match.locationName ?? ''),
+          }
+        : row,
+    )
+  }
   return out
 }

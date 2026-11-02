@@ -18,6 +18,14 @@ function sellingPrice(row: SpreadsheetInventoryRow): number | null {
   return row.retailPrice ?? row.salePrice
 }
 
+function massDescription(row: SpreadsheetInventoryRow): string {
+  return (
+    (row.bridalLiveDescription ?? '').trim() ||
+    (row.description ?? '').trim() ||
+    (row.longDescription ?? '').trim()
+  )
+}
+
 export function rowToMassPayload(row: SpreadsheetInventoryRow): MassLabelPayload {
   const itemNumber = row.itemNumber || row.itemName
   const sale = sellingPrice(row)
@@ -38,6 +46,8 @@ export function rowToMassPayload(row: SpreadsheetInventoryRow): MassLabelPayload
     origPrice: showOrig ? `orig:${formatMoney(retail)}` : '',
     itemNumber,
     barcodeValue: itemNumber,
+    description: massDescription(row),
+    locationCode: (row.locationCode ?? '').trim(),
   }
 }
 

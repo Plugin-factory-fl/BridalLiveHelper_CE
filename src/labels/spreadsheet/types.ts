@@ -17,6 +17,10 @@ export type SpreadsheetInventoryRow = {
   selected: boolean
   /** BridalLive department after a scan-gun lookup. */
   department?: string
+  /** BridalLive item Description, looked up by item number. Wins over the sheet columns. */
+  bridalLiveDescription?: string
+  /** Store code for the tag (PK / PLM). */
+  locationCode?: string
   /** Set after matching a scan list to BridalLive. */
   matched?: boolean
 }

@@ -8,4 +8,7 @@ export type MassLabelPayload = {
   origPrice: string
   itemNumber: string
   barcodeValue: string
+  /** BridalLive Description, else sheet Description, else Long Description. Never size or color. */
+  description: string
+  locationCode: string
 }
