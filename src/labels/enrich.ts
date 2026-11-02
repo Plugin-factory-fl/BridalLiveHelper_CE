@@ -162,8 +162,8 @@ export function enrichFromCatalog(
   const msrp = formatMoney(retail)
   const salePrice = formatMoney(sale != null && sale > 0 ? sale : retail)
 
+  /* Name comes from the BridalLive item name; Description is only the small line. */
   const itemName = pickDescriptiveName(itemNumber, [
-    match?.description,
     line.style,
     match?.style,
     line.vendorItemName,

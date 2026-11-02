@@ -5,6 +5,30 @@ import { getWorkingLocationId } from '../lib/helper-session'
 import { resolveDataSource } from '../lib/data-source'
 import { getMockCatalog } from '../inventory/mock-provider'
 import { searchInventory } from '../inventory/service'
+import { bridalLiveFetch } from '../lib/bridallive-auth'
+import type { BridalLiveItem } from '../lib/bridallive-item-map'
+
+/**
+ * Labels print BridalLive's own item Description field (`description`).
+ * The items list endpoint can leave it out, so read the full item when it is missing.
+ */
+async function withBridalLiveDescription(
+  item: InventoryItem,
+  storeId: string,
+): Promise<InventoryItem> {
+  if ((item.description ?? '').trim() || !/^\d+$/.test(item.id)) return item
+  if ((await resolveDataSource()) !== 'bridallive') return item
+  try {
+    const full = await bridalLiveFetch<BridalLiveItem>(`/api/items/${item.id}`, {
+      method: 'GET',
+      storeId,
+    })
+    const description = (full?.description ?? '').trim()
+    return description ? { ...item, description } : item
+  } catch {
+    return item
+  }
+}
 
 function normalizeKey(value: string): string {
   return value.trim().toLowerCase()
@@ -23,10 +47,10 @@ export async function lookupInventoryByItemNumber(
     { itemNumber: want, locationId: resolvedStoreId },
     resolvedStoreId,
   )
-  return (
+  const match =
     items.find((i) => normalizeKey(i.itemNumber) === normalizeKey(want)) ??
     (items.length === 1 ? items[0]! : null)
-  )
+  return match ? withBridalLiveDescription(match, resolvedStoreId) : null
 }
 
 /**
