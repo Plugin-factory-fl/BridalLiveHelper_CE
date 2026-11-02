@@ -6,7 +6,7 @@ import { resolveDataSource } from '../lib/data-source'
 import { getMockCatalog } from '../inventory/mock-provider'
 import { searchInventory } from '../inventory/service'
 import { bridalLiveFetch } from '../lib/bridallive-auth'
-import type { BridalLiveItem } from '../lib/bridallive-item-map'
+import { itemDescription, type BridalLiveItem } from '../lib/bridallive-item-map'
 
 /**
  * Labels print BridalLive's own item Description field (`description`).
@@ -21,11 +21,13 @@ async function withBridalLiveDescription(
   try {
     const full = await bridalLiveFetch<BridalLiveItem>(`/api/items/${item.id}`, {
       method: 'GET',
-      storeId,
+      storeId: item.locationId || storeId,
     })
-    const description = (full?.description ?? '').trim()
+    const description = full ? itemDescription(full) : ''
+    if (!description) console.info(`[labels] BridalLive item #${item.itemNumber} has no Description.`)
     return description ? { ...item, description } : item
-  } catch {
+  } catch (err) {
+    console.warn(`[labels] Could not read Description for item #${item.itemNumber}:`, err)
     return item
   }
 }

@@ -27,6 +27,8 @@ export type BridalLiveItem = {
   currentPrice?: number
   cost?: number
   description?: string
+  /** BridalLive "Long Description" (newer item field). */
+  longDescription?: string
   status?: string
   inventoryItem?: boolean
   notes?: string
@@ -45,6 +47,13 @@ export type BridalLiveItemListResult = {
   size?: number
   total?: number
   result?: BridalLiveItem[]
+}
+
+/** BridalLive Description, else Long Description. Never size or color. */
+export function itemDescription(item: BridalLiveItem): string {
+  const short = typeof item.description === 'string' ? item.description.trim() : ''
+  if (short) return short
+  return typeof item.longDescription === 'string' ? item.longDescription.trim() : ''
 }
 
 export function formatItemNumber(item: BridalLiveItem): string {
@@ -81,7 +90,7 @@ export function mapBridalLiveItem(
     itemNumber,
     style,
     vendorItemName: (item.vendorItemName ?? '').trim() || style,
-    description: (item.description ?? '').trim() || undefined,
+    description: itemDescription(item) || undefined,
     vendor,
     vendorCode,
     saleSearchQuery: buildSaleSearchQuery(vendor, itemNumber),
