@@ -2,7 +2,16 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 
-const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
+const ADMIN_MAX_AGE_MS = 30 * DAY_MS
+const DEFAULT_MAX_AGE_MS = DAY_MS
+const LONG_SESSION_EMAILS = new Set(['chicboutiques@gmail.com', 'admin@chicboutiqueny.com'])
+
+export function sessionMaxAgeMs(email) {
+  return LONG_SESSION_EMAILS.has(String(email ?? '').trim().toLowerCase())
+    ? ADMIN_MAX_AGE_MS
+    : DEFAULT_MAX_AGE_MS
+}
 
 export function createSessionStore(dataDir) {
   const filePath = path.join(dataDir, 'helper-sessions.json')
@@ -30,14 +39,13 @@ export function createSessionStore(dataDir) {
     try {
       const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'))
       const list = Array.isArray(raw?.sessions) ? raw.sessions : []
-      const cutoff = Date.now() - MAX_AGE_MS
       for (const row of list) {
         const token = String(row?.token ?? '')
         const email = String(row?.email ?? '')
           .trim()
           .toLowerCase()
         const createdAt = Number(row?.createdAt) || 0
-        if (!token || !email || createdAt < cutoff) continue
+        if (!token || !email || createdAt < Date.now() - sessionMaxAgeMs(email)) continue
         sessions.set(token, {
           email,
           locationId: String(row.locationId ?? 'poughkeepsie'),
@@ -55,7 +63,7 @@ export function createSessionStore(dataDir) {
     get(token) {
       const row = sessions.get(String(token ?? ''))
       if (!row) return null
-      if (row.createdAt < Date.now() - MAX_AGE_MS) {
+      if (row.createdAt < Date.now() - sessionMaxAgeMs(row.email)) {
         sessions.delete(String(token))
         try {
           persist()

@@ -289,21 +289,13 @@ function isColorsCaption(text: string): boolean {
 }
 
 function shoeName(payload: LabelPayload): string {
-  const desc = payload.description.trim()
   const color = (payload.color ?? '').trim().toLowerCase()
   const itemNumber = payload.itemNumber.trim().toLowerCase()
-  if (
-    desc &&
-    !isColorsCaption(desc) &&
-    desc.includes('-') &&
-    desc.toLowerCase() !== color &&
-    desc.toLowerCase() !== itemNumber
-  ) {
-    return desc
-  }
+  /* The product name always wins. The description never replaces it. */
   const name = payload.itemName.trim()
   if (
     name &&
+    name !== 'Unknown style' &&
     !isColorsCaption(name) &&
     name.toLowerCase() !== itemNumber &&
     name.toLowerCase() !== color
@@ -463,6 +455,18 @@ function drawBarcodeColumn(
  * Vertically center location (and optional extra lines) in the existing
  * barcode-top reserve. Does not change barcode size.
  */
+/** Small description text under PLM / PK, clipped to the space above the barcode. */
+const RESERVE_DESC_SIZE = 6
+const RESERVE_DESC_GAP = 1
+
+function reserveDescLines(desc: string, fonts: LabelDrawFonts, width: number): string[] {
+  const text = desc.trim()
+  if (!text) return []
+  const room = BARCODE_TOP_RESERVE_H - LOCATION_SIZE - 2
+  const maxLines = Math.max(1, Math.floor((room + RESERVE_DESC_GAP) / (RESERVE_DESC_SIZE + RESERVE_DESC_GAP)))
+  return descriptionLines(text, fonts.regular, RESERVE_DESC_SIZE, width, maxLines)
+}
+
 function drawRightReserveCopy(
   page: PDFPage,
   fonts: LabelDrawFonts,
@@ -473,21 +477,22 @@ function drawRightReserveCopy(
   loc: string,
   extraLines: string[] = [],
 ): void {
-  const extraSize = 7.5
-  const gap = 1.8
   const items: Array<{ text: string; font: LabelDrawFonts['regular']; size: number }> = []
   if (loc) items.push({ text: loc, font: fonts.bold, size: LOCATION_SIZE })
   for (const line of extraLines) {
-    items.push({ text: line, font: fonts.regular, size: extraSize })
+    items.push({ text: line, font: fonts.regular, size: RESERVE_DESC_SIZE })
   }
   if (!items.length) return
-  const blockH = items.reduce((sum, item, i) => sum + item.size + (i > 0 ? gap : 0), 0)
-  let top = reserveY + (reserveH - blockH) / 2 + blockH
-  for (const item of items) {
-    const baseline = top - item.size
-    drawFitted(page, item.text, item.font, item.size, x, baseline, reserveW, 'center')
-    top = baseline - gap
-  }
+  const gap = (i: number) => (i === 0 ? 0 : items[i - 1]!.font === fonts.bold ? 1.6 : RESERVE_DESC_GAP)
+  const blockH = items.reduce((sum, item, i) => sum + item.size + gap(i), 0)
+  /* Location centered when alone; with a description, the block starts at the top. */
+  let top = extraLines.length ? reserveY + reserveH - 0.5 : reserveY + (reserveH - blockH) / 2 + blockH
+  items.forEach((item, i) => {
+    const baseline = top - gap(i) - item.size
+    if (baseline < reserveY) return
+    drawFitted(page, item.text, item.font, item.size, x + 1, baseline, reserveW - 2, 'center')
+    top = baseline
+  })
 }
 
 /**
@@ -635,17 +640,17 @@ function drawJewelryTag(
 
   const topRightY = y + h - pad - BARCODE_TOP_RESERVE_H
   const loc = payload.locationCode?.trim() ?? ''
-  if (loc) {
-    drawRightReserveCopy(
-      page,
-      fonts,
-      x + leftW,
-      topRightY,
-      rightW,
-      BARCODE_TOP_RESERVE_H,
-      loc,
-    )
-  }
+  const jewelryDesc = reserveDescLines(shoeDescription(payload, displayName(payload)), fonts, rightW - 2)
+  drawRightReserveCopy(
+    page,
+    fonts,
+    x + leftW,
+    topRightY,
+    rightW,
+    BARCODE_TOP_RESERVE_H,
+    loc,
+    jewelryDesc,
+  )
 
   const barcodeColH = Math.max(18, topRightY - 2 - (y + pad))
   drawBarcodeColumn(page, payload, fonts, x + leftW, y + pad, rightW, barcodeColH)
@@ -727,9 +732,7 @@ function drawShoesTag(
   const topRightH = BARCODE_TOP_RESERVE_H
   const topRightY = y + h - pad - topRightH
   const loc = payload.locationCode?.trim() ?? ''
-  const extraLines = descText
-    ? descriptionLines(descText, fonts.regular, 7.5, rightW - 2, 3)
-    : []
+  const extraLines = reserveDescLines(descText, fonts, rightW - 2)
   drawRightReserveCopy(page, fonts, x + leftW, topRightY, rightW, topRightH, loc, extraLines)
 
   const barcodeColH = Math.max(18, topRightY - 2 - (y + pad))
@@ -857,7 +860,8 @@ function drawShoesStock(
   const topRightH = BARCODE_TOP_RESERVE_H
   const topRightY = y + h - pad - topRightH
   const loc = payload.locationCode?.trim() ?? ''
-  drawRightReserveCopy(page, fonts, x + leftW, topRightY, rightW, topRightH, loc)
+  const stockDesc = reserveDescLines(shoeDescription(payload, nameText), fonts, rightW - 2)
+  drawRightReserveCopy(page, fonts, x + leftW, topRightY, rightW, topRightH, loc, stockDesc)
 
   const barcodeColH = Math.max(18, topRightY - 2 - (y + pad))
   drawBarcodeColumn(page, payload, fonts, x + leftW, y + pad, rightW, barcodeColH)

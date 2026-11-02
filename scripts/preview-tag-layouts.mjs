@@ -94,7 +94,7 @@ const SAMPLES = [
       itemNumber: '88210',
       style: 'Pearl drop',
       itemName: 'Pearl drop earrings',
-      description: '',
+      description: 'Freshwater pearl, gold plated',
       vendor: 'JW',
       department: 'Jewelry',
       size: '—',
@@ -137,6 +137,13 @@ async function bundlePreviewModules(outFile) {
 function rasterizePdf(pdfPath, pngPath) {
   const outDir = dirname(pngPath)
   mkdirSync(outDir, { recursive: true })
+  if (process.platform !== 'darwin') {
+    const base = pngPath.replace(/\.png$/, '')
+    execFileSync('pdftoppm', ['-png', '-singlefile', '-scale-to', String(PREVIEW_LONG_EDGE), pdfPath, base], {
+      stdio: 'pipe',
+    })
+    return
+  }
   execFileSync('qlmanage', ['-t', '-s', String(PREVIEW_LONG_EDGE), '-o', outDir, pdfPath], {
     stdio: 'pipe',
   })

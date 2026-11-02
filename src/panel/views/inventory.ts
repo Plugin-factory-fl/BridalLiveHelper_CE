@@ -178,7 +178,7 @@ export const renderInventory: ViewRender = (root) => {
           <input
             name="name"
             type="text"
-            placeholder="CD55830"
+            placeholder="Private Label Name"
             title="BridalLive item name"
             autocomplete="off"
           />
@@ -190,7 +190,7 @@ export const renderInventory: ViewRender = (root) => {
           <input
             name="vendorItemName"
             type="text"
-            placeholder="j879"
+            placeholder="CD868"
             title="Manufacturer / vendor style name"
             autocomplete="off"
           />

@@ -106,9 +106,9 @@ export async function validateHelperSession(): Promise<HelperSession | null> {
       signal: AbortSignal.timeout(15_000),
     })
     if (res.status === 401) {
-      /* Keep the local session so Poughkeepsie inventory already on this computer
-         keeps working. Switching boutique will ask them to sign in again. */
-      return session
+      /* Session expired on the server (24 hours, or 30 days for admins). Send them back to sign in. */
+      await clearHelperSession()
+      return null
     }
     if (!res.ok) return session
     const data = (await res.json()) as {
