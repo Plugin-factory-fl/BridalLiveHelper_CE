@@ -34,6 +34,8 @@ export type LabelLineItem = {
   department?: Department
   retailPrice?: number
   salePrice?: number
+  /** Spreadsheet Description, then Long Description. Used when BridalLive's is empty. */
+  description?: string
   /** Per-line layout (reprint shoe tag vs shoe stock). Wins over the batch design picker. */
   styleLayoutId?: string
 }

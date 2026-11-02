@@ -133,6 +133,7 @@ export function expandSpreadsheetRowsToLabelLines(
         department: departmentFromRow(row),
         retailPrice: row.retailPrice ?? undefined,
         salePrice: row.salePrice ?? undefined,
+        description: massDescription(row) || undefined,
       }
     })
 }

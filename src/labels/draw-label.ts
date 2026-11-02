@@ -196,7 +196,8 @@ function hasDistinctOriginalPrice(payload: LabelPayload): boolean {
 const PRICE_BOX_H = 18
 /** Slightly shorter sale box on shoe stock so name / color / size can grow. */
 const PRICE_BOX_H_STOCK = 15.5
-const ORIG_PRICE_SIZE = 8.5
+const ORIG_PRICE_SIZE = 9.5
+const ORIG_PRICE_MIN = 8.5
 /** Right-column space above the barcode. Do not change — barcode height depends on this. */
 const BARCODE_TOP_RESERVE_H = 28
 /** Store code (PLM / PK) — shared size so dress matches shoes and jewelry. */
@@ -204,7 +205,7 @@ const LOCATION_SIZE = 9
 const ORIG_PRICE_GAP = 2.5
 
 function originalPriceBlockHeight(): number {
-  return ORIG_PRICE_SIZE + 2
+  return ORIG_PRICE_SIZE + 1.5
 }
 
 /**
@@ -227,12 +228,18 @@ function drawOriginalPriceBlock(
   }
   const amount = originalPriceAmount(payload)
 
-  const caption = 'Original Price '
+  let caption = 'Original Price '
   let usedSize = ORIG_PRICE_SIZE
   const fits = (size: number) =>
     fonts.regular.widthOfTextAtSize(caption, size) + fonts.regular.widthOfTextAtSize(amount, size) <= w
-  while (usedSize > 6.5 && !fits(usedSize)) {
+  while (usedSize > ORIG_PRICE_MIN && !fits(usedSize)) {
     usedSize -= 0.25
+  }
+  /* Too narrow for a readable full caption: keep the size and say "Original". */
+  if (!fits(usedSize)) {
+    caption = 'Original '
+    usedSize = ORIG_PRICE_SIZE
+    while (usedSize > 6.5 && !fits(usedSize)) usedSize -= 0.25
   }
   const captionW = fonts.regular.widthOfTextAtSize(caption, usedSize)
   const amountW = fonts.regular.widthOfTextAtSize(amount, usedSize)
@@ -668,7 +675,8 @@ function drawShoesTag(
   const pad = 2.5
   const priceBoxX = x + pad
   const priceBoxW = leftW - pad * 2
-  const priceBoxH = PRICE_BOX_H
+  /* A little shorter sale box when Original Price shows, so the name keeps its size. */
+  const priceBoxH = hasDistinctOriginalPrice(payload) ? PRICE_BOX_H - 1.5 : PRICE_BOX_H
   const priceBoxY = y + pad
 
   drawPriceBox(page, fonts, saleLabel(payload), priceBoxX, priceBoxY, priceBoxW, priceBoxH)
@@ -688,12 +696,18 @@ function drawShoesTag(
   const descText = shoeDescription(payload, nameText)
   const sizeColorText = [sizeText, colorText].filter(Boolean).join(' · ')
 
-  const sizeColorSize = 12
-  const nameSize = maxSizeForWidth(fonts.bold, nameText, priceBoxW, 15, 9.5)
-  const nameLineH = nameSize + 1.6
   const nameCeiling = y + h - pad
-  const sizeColorBaseline = origTop + 3.5
-  const nameFloorMin = sizeColorBaseline + sizeColorSize + 2
+  /* Keep size / color and the name from touching when Original Price takes room. */
+  const tight = nameCeiling - (origTop + 3.5) < 33
+  const sizeColorBaseline = origTop + (tight ? 2 : 3.5)
+  const sizeColorSize = tight ? 10 : 12
+  const nameFloorMin = sizeColorBaseline + sizeColorSize + (tight ? 1.5 : 2)
+  const nameRoom = nameCeiling - nameFloorMin
+  const nameSize = Math.min(
+    maxSizeForWidth(fonts.bold, nameText, priceBoxW, 15, 9.5),
+    Math.max(9.5, nameRoom - 0.5),
+  )
+  const nameLineH = nameSize + 1.6
   const nameH = Math.max(8, Math.min(nameLineH * 2, nameCeiling - nameFloorMin))
   const nameFloor = nameCeiling - nameH
   const nameMaxLines =

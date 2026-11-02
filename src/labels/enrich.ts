@@ -174,7 +174,7 @@ export function enrichFromCatalog(
     itemNumber,
     style: line.style ?? match?.style ?? 'Unknown style',
     itemName,
-    description: (match?.description ?? '').trim(),
+    description: (match?.description ?? '').trim() || (line.description ?? '').trim(),
     vendor: match?.vendor ?? 'Unknown vendor',
     department,
     size,
