@@ -1,6 +1,6 @@
 # BridalLive Helper privacy policy
 
-Last updated: 31 August 2026. Version 0.0.2.
+Last updated: 31 August 2026. Version 0.0.3.
 
 Public URL for the Chrome Web Store: **https://bridallivehelper-ce.onrender.com/privacy**
 

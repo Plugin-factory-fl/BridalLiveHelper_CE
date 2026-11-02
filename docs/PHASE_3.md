@@ -46,4 +46,4 @@ Staff send email, password, and a location id. BridalLive keys never leave the s
 
 ## Remaining work that needs a person (not code)
 
-- **Private or unlisted Chrome Web Store listing** — upload `bridallive-helper-0.0.2.zip` and paste the copy in [Chrome Web Store listing](./CHROME_WEB_STORE.md). That is how the shop installs and updates the Helper. Unpacked `dist/` is for development.
+- **Private or unlisted Chrome Web Store listing** — upload `bridallive-helper-0.0.3.zip` and paste the copy in [Chrome Web Store listing](./CHROME_WEB_STORE.md). That is how the shop installs and updates the Helper. Unpacked `dist/` is for development.

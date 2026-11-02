@@ -3,7 +3,7 @@ import { defineManifest } from '@crxjs/vite-plugin'
 export default defineManifest({
   manifest_version: 3,
   name: 'BridalLive Helper',
-  version: '0.0.2',
+  version: '0.0.3',
   description:
     'Side workstation for BridalLive: look up inventory, add sizes and colors, and print labels.',
   homepage_url: 'https://bridallivehelper-ce.onrender.com/privacy',

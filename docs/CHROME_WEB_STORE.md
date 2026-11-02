@@ -1,9 +1,9 @@
-# Chrome Web Store — BridalLive Helper 0.0.2
+# Chrome Web Store — BridalLive Helper 0.0.3
 
 This file is what you paste and upload. The listing itself is created in the
 [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 
-**Version in the package is `0.0.2`.**
+**Version in the package is `0.0.3`.**
 
 ## 1. Build the zip
 
@@ -11,7 +11,7 @@ This file is what you paste and upload. The listing itself is created in the
 npm run package:zip
 ```
 
-That writes `bridallive-helper-0.0.2.zip` at the repo root. Upload **that zip**, not the whole project and not `node_modules`. This version must be higher than 0.0.1 already on the store.
+That writes `bridallive-helper-0.0.3.zip` at the repo root. Upload **that zip**, not the whole project and not `node_modules`. This version must be higher than 0.0.2 already on the store.
 
 ## 2. Dashboard fields
 
@@ -20,7 +20,7 @@ Use a **private** listing (Google Group of shop emails) or **unlisted** (anyone 
 | Field | Paste this |
 |-------|------------|
 | Name | BridalLive Helper |
-| Version | 0.0.2 (comes from the zip) |
+| Version | 0.0.3 (comes from the zip) |
 | Visibility | Private or Unlisted — not Public |
 | Language | English |
 | Category | Productivity |
@@ -41,7 +41,7 @@ This listing is for The Chic Boutique (PLM and Poughkeepsie). Staff sign in on H
 
 You need Chrome 141 or newer. Open https://app.bridallive.com, then click the Helper icon in the toolbar.
 
-Version 0.0.2.
+Version 0.0.3.
 ```
 
 ### Single purpose
@@ -121,4 +121,4 @@ The store icon is the 128×128 `BL` mark already in the zip. Promo tiles (440×2
 3. Click **Add to Chrome**.
 4. Open BridalLive and click the Helper toolbar icon.
 
-Staff should **not** use Load unpacked once the listing is live. Updates come from the store when you upload a new zip with a higher version than 0.0.2.
+Staff should **not** use Load unpacked once the listing is live. Updates come from the store when you upload a new zip with a higher version than 0.0.3.
